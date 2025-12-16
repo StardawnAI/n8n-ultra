@@ -44,26 +44,19 @@ jobs:
             for file in $CONFLICTS; do
               echo "Resolving: $file"
               
-              # Logic:
-              # 1. If file is in .github/workflows (and NOT sync.yml), take UPSTREAM version (Theirs).
-              #    This restores deleted workflow files if upstream modified/kept them.
-              # 2. For everything else, take OUR version.
+              # Logic: Always take OUR version.
+              # If we deleted the file (like upstream workflows), keep it deleted.
+              # If we have the file, keep our version.
               
-              if [[ "$file" == .github/workflows/* ]] && [[ "$file" != ".github/workflows/sync.yml" ]]; then
-                 echo "  -> Taking UPSTREAM version (Theirs) for workflow file"
-                 git checkout --theirs -- "$file"
-                 git add "$file"
+              echo "  -> Taking OUR version (Ours)"
+              # Check if we deleted the file in our HEAD or if we have it
+              if git ls-tree -r HEAD --name-only | grep -q "^$file$"; then
+                # We have the file -> Keep our version
+                git checkout --ours -- "$file"
+                git add "$file"
               else
-                 echo "  -> Taking OUR version (Ours)"
-                 # Check if we deleted the file in our HEAD or if we have it
-                 if git ls-tree -r HEAD --name-only | grep -q "^$file$"; then
-                   # We have the file -> Keep our version
-                   git checkout --ours -- "$file"
-                   git add "$file"
-                 else
-                   # We deleted the file -> Keep it deleted
-                   git rm "$file"
-                 fi
+                # We deleted the file -> Keep it deleted
+                git rm "$file"
               fi
             done
             
