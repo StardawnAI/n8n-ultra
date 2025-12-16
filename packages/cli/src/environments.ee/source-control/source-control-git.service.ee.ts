@@ -27,6 +27,15 @@ import { sourceControlFoldersExistCheck } from './source-control-helper.ee';
 import { SourceControlPreferencesService } from './source-control-preferences.service.ee';
 import type { SourceControlPreferences } from './types/source-control-preferences';
 
+/**
+ * Service for interacting with locally cloned git repositories.
+ *
+ * For local development:
+ * Keep in mind that when running n8n locally using a pnpm dev script,
+ * the git credentials on your machine will be picked up by the git client
+ * used in this service.
+ * See the README for the environments feature for instructions to run n8n in a docker container.
+ */
 @Service()
 export class SourceControlGitService {
 	git: SimpleGit | null = null;
@@ -112,8 +121,21 @@ export class SourceControlGitService {
 		const { simpleGit } = await import('simple-git');
 
 		if (preferences.connectionType === 'https') {
-			this.git = simpleGit(this.gitOptions).env('GIT_TERMINAL_PROMPT', '0');
-		} else {
+			const credentials = await this.sourceControlPreferencesService.getDecryptedHttpsCredentials();
+			const escapeShellArg = (arg: string) => `'${arg.replace(/'/g, "'\"'\"'")}'`;
+			const credentialScript = `!f() { echo username=${escapeShellArg(credentials.username)}; echo password=${escapeShellArg(credentials.password)}; }; f`;
+
+			const httpsGitOptions = {
+				...this.gitOptions,
+				config: [
+					'credential.helper=' + credentialScript,
+					// ensures that the credentials are only used for the configured repositoryUrl of the environment
+					'credential.useHttpPath=true',
+				],
+			};
+
+			this.git = simpleGit(httpsGitOptions).env('GIT_TERMINAL_PROMPT', '0');
+		} else if (preferences.connectionType === 'ssh') {
 			const privateKeyPath = await this.sourceControlPreferencesService.getPrivateKeyPath();
 			const sshKnownHosts = path.join(sshFolder, 'known_hosts');
 
@@ -160,27 +182,9 @@ export class SourceControlGitService {
 		}
 		try {
 			const remotes = await this.git.getRemotes(true);
-			const foundRemote = remotes.find((e) => {
-				if (e.name !== SOURCE_CONTROL_ORIGIN) return false;
-
-				// Normalize URLs by removing credentials to safely compare HTTPS URLs
-				// that may contain username/password authentication details
-				const normalizeUrl = (url: string) => {
-					try {
-						const urlObj = new URL(url);
-						urlObj.username = '';
-						urlObj.password = '';
-						return urlObj.toString();
-					} catch {
-						return url;
-					}
-				};
-
-				const remoteNormalized = normalizeUrl(e.refs.push);
-				const inputNormalized = normalizeUrl(remote);
-
-				return remoteNormalized === inputNormalized;
-			});
+			const foundRemote = remotes.find(
+				(e) => e.name === SOURCE_CONTROL_ORIGIN && e.refs.push === remote,
+			);
 
 			if (foundRemote) {
 				this.logger.debug(`Git remote found: ${foundRemote.name}: ${foundRemote.refs.push}`);
@@ -194,25 +198,6 @@ export class SourceControlGitService {
 		return false;
 	}
 
-	private async getAuthorizedHttpsRepositoryUrl(
-		repositoryUrl: string,
-		connectionType: string | undefined,
-	): Promise<string> {
-		if (connectionType !== 'https') {
-			return repositoryUrl;
-		}
-
-		const credentials = await this.sourceControlPreferencesService.getDecryptedHttpsCredentials();
-		if (!credentials) {
-			throw new UnexpectedError('HTTPS connection type specified but no credentials found');
-		}
-
-		const urlObj = new URL(repositoryUrl);
-		urlObj.username = encodeURIComponent(credentials.username);
-		urlObj.password = encodeURIComponent(credentials.password);
-		return urlObj.toString();
-	}
-
 	async initRepository(
 		sourceControlPreferences: Pick<
 			SourceControlPreferences,
@@ -223,7 +208,9 @@ export class SourceControlGitService {
 		if (!this.git) {
 			throw new UnexpectedError('Git is not initialized (Promise)');
 		}
-		if (sourceControlPreferences.initRepo) {
+		const { branchName, initRepo, repositoryUrl } = sourceControlPreferences;
+
+		if (initRepo) {
 			try {
 				await this.git.init();
 			} catch (error) {
@@ -231,14 +218,9 @@ export class SourceControlGitService {
 			}
 		}
 
-		const repositoryUrl = await this.getAuthorizedHttpsRepositoryUrl(
-			sourceControlPreferences.repositoryUrl,
-			sourceControlPreferences.connectionType,
-		);
-
 		try {
 			await this.git.addRemote(SOURCE_CONTROL_ORIGIN, repositoryUrl);
-			this.logger.debug(`Git remote added: ${sourceControlPreferences.repositoryUrl}`);
+			this.logger.debug(`Git remote added: ${repositoryUrl}`);
 		} catch (error) {
 			if ((error as Error).message.includes('remote origin already exists')) {
 				this.logger.debug(`Git remote already exists: ${(error as Error).message}`);
@@ -253,13 +235,13 @@ export class SourceControlGitService {
 			user.email ?? SOURCE_CONTROL_DEFAULT_EMAIL,
 		);
 
-		await this.trackRemoteIfReady(sourceControlPreferences.branchName);
+		await this.trackRemoteIfReady(branchName);
 
-		if (sourceControlPreferences.initRepo) {
+		if (initRepo) {
 			try {
 				const branches = await this.getBranches();
 				if (branches.branches?.length === 0) {
-					await this.git.raw(['branch', '-M', sourceControlPreferences.branchName]);
+					await this.git.raw(['branch', '-M', branchName]);
 				}
 			} catch (error) {
 				this.logger.debug(`Git init: ${(error as Error).message}`);

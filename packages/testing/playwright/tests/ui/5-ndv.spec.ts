@@ -29,7 +29,7 @@ test.describe('NDV', () => {
 		const canvasNodes = n8n.canvas.getCanvasNodes();
 		await canvasNodes.last().dblclick();
 		await expect(n8n.ndv.getContainer()).toBeVisible();
-		await expect(n8n.ndv.inputPanel.get()).toContainText('Wire me up');
+		await expect(n8n.ndv.inputPanel.get()).toContainText('No input connected');
 	});
 
 	test('should test webhook node', async ({ n8n }) => {
@@ -237,12 +237,13 @@ test.describe('NDV', () => {
 			await n8n.canvas.clickZoomToFitButton();
 			await n8n.canvas.openNode('Set');
 
-			await expect(n8n.ndv.outputPanel.get().getByText('20 items')).toBeVisible();
-			await expect(n8n.ndv.outputPanel.get().locator('[class*="_pagination"]')).toBeVisible();
+			// 26 items with page size 25 = 2 pages, so pagination is visible
+			await expect(n8n.ndv.outputPanel.get().getByText('26 items')).toBeVisible();
+			await expect(n8n.ndv.getOutputPagination()).toBeVisible();
 
 			await n8n.ndv.outputPanel.switchDisplayMode('schema');
 
-			await expect(n8n.ndv.outputPanel.get().locator('[class*="_pagination"]')).toBeHidden();
+			await expect(n8n.ndv.getOutputPagination()).toBeHidden();
 		});
 	});
 
@@ -486,7 +487,9 @@ test.describe('NDV', () => {
 			await n8n.canvas.addNode('Notion', { action: 'Update a database page', closeNDV: false });
 			await expect(n8n.ndv.getContainer()).toBeVisible();
 
-			await n8n.credentials.createAndSaveNewCredential('apiKey', 'sk_test_123');
+			await n8n.credentialsComposer.createFromNdv({
+				apiKey: 'sk_test_123',
+			});
 			await n8n.ndv.addItemToFixedCollection('propertiesUi');
 			await expect(
 				n8n.ndv.getParameterInputWithIssues('propertiesUi.propertyValues[0].key'),
@@ -512,6 +515,7 @@ test.describe('NDV', () => {
 
 				await n8n.canvas.getSelectedNodes().first().dblclick();
 				await expect(n8n.ndv.getContainer()).toBeVisible();
+				await expect(n8n.ndv.getFloatingNodeByPosition('outputMain')).toBeVisible();
 			}
 
 			await n8n.ndv.clickFloatingNodeByPosition('outputMain');
@@ -550,6 +554,7 @@ test.describe('NDV', () => {
 
 				await n8n.canvas.getSelectedNodes().first().dblclick();
 				await expect(n8n.ndv.getContainer()).toBeVisible();
+				await expect(n8n.ndv.getFloatingNodeByPosition('outputMain')).toBeVisible();
 			}
 
 			await n8n.ndv.navigateToNextFloatingNodeWithKeyboard();
@@ -578,7 +583,7 @@ test.describe('NDV', () => {
 			await n8n.ndv.connectAISubNode('ai_memory', 'Simple Memory');
 			await n8n.ndv.connectAISubNode('ai_tool', 'HTTP Request Tool');
 
-			expect(await n8n.ndv.getNodesWithIssuesCount()).toBeGreaterThanOrEqual(2);
+			await expect(n8n.ndv.getNodesWithIssues()).toHaveCount(2);
 		});
 
 		test('should have the floating nodes in correct order', async ({ n8n }) => {
@@ -631,8 +636,10 @@ test.describe('NDV', () => {
 			await n8n.canvas.addNode('Manual Trigger');
 			await n8n.canvas.addNode('Discord', { closeNDV: false, action: 'Delete a message' });
 			await expect(n8n.ndv.getContainer()).toBeVisible();
+			await n8n.credentialsComposer.createFromNdv({
+				botToken: 'sk_test_123',
+			});
 
-			await n8n.credentials.createAndSaveNewCredential('botToken', 'sk_test_123');
 			const resourceInput = n8n.ndv.getParameterInputField('resource');
 			const operationInput = n8n.ndv.getParameterInputField('operation');
 

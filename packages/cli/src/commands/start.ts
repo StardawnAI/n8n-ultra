@@ -7,7 +7,7 @@ import { Container } from '@n8n/di';
 import glob from 'fast-glob';
 import { createReadStream, createWriteStream, existsSync } from 'fs';
 import { mkdir } from 'fs/promises';
-import { jsonParse, randomString, type IWorkflowExecutionDataProcess } from 'n8n-workflow';
+import { jsonParse, type IWorkflowExecutionDataProcess } from 'n8n-workflow';
 import path from 'path';
 import replaceStream from 'replacestream';
 import { pipeline } from 'stream/promises';
@@ -33,6 +33,8 @@ import { WaitTracker } from '@/wait-tracker';
 import { WorkflowRunner } from '@/workflow-runner';
 
 import { BaseCommand } from './base-command';
+import { CredentialsOverwrites } from '@/credentials-overwrites';
+import { DeprecationService } from '@/deprecation/deprecation.service';
 
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 const open = require('open');
@@ -50,7 +52,7 @@ const flagsSchema = z.object({
 @Command({
 	name: 'start',
 	description: 'Starts n8n. Makes Web-UI available and starts active workflows',
-	examples: ['', '--tunnel', '-o', '--tunnel -o'],
+	examples: ['', '-o'],
 	flagsSchema,
 })
 export class Start extends BaseCommand<z.infer<typeof flagsSchema>> {
@@ -99,7 +101,7 @@ export class Start extends BaseCommand<z.infer<typeof flagsSchema>> {
 				await Container.get(MultiMainSetup).shutdown();
 			}
 
-			if (config.getEnv('executions.mode') === 'queue') {
+			if (this.globalConfig.executions.mode === 'queue') {
 				Container.get(Publisher).shutdown();
 				Container.get(Subscriber).shutdown();
 			}
@@ -191,7 +193,7 @@ export class Start extends BaseCommand<z.infer<typeof flagsSchema>> {
 		await this.initCrashJournal();
 
 		this.logger.info('Initializing n8n process');
-		if (config.getEnv('executions.mode') === 'queue') {
+		if (this.globalConfig.executions.mode === 'queue') {
 			const scopedLogger = this.logger.scoped('scaling');
 			scopedLogger.debug('Starting main instance in scaling mode');
 			scopedLogger.debug(`Host ID: ${this.instanceSettings.hostId}`);
@@ -199,10 +201,12 @@ export class Start extends BaseCommand<z.infer<typeof flagsSchema>> {
 
 		await super.init();
 
+		Container.get(DeprecationService).warn();
+
 		this.activeWorkflowManager = Container.get(ActiveWorkflowManager);
 
 		const isMultiMainEnabled =
-			config.getEnv('executions.mode') === 'queue' && this.globalConfig.multiMainSetup.enabled;
+			this.globalConfig.executions.mode === 'queue' && this.globalConfig.multiMainSetup.enabled;
 
 		this.instanceSettings.setMultiMainEnabled(isMultiMainEnabled);
 
@@ -213,7 +217,7 @@ export class Start extends BaseCommand<z.infer<typeof flagsSchema>> {
 		 */
 		if (isMultiMainEnabled) this.instanceSettings.setMultiMainLicensed(true);
 
-		if (config.getEnv('executions.mode') === 'regular') {
+		if (this.globalConfig.executions.mode === 'regular') {
 			this.instanceSettings.markAsLeader();
 		} else {
 			await this.initOrchestration();
@@ -227,6 +231,8 @@ export class Start extends BaseCommand<z.infer<typeof flagsSchema>> {
 
 		Container.get(WaitTracker).init();
 		this.logger.debug('Wait tracker init complete');
+		await Container.get(CredentialsOverwrites).init();
+		this.logger.debug('Credentials overwrites init complete');
 		await this.initBinaryDataService();
 		this.logger.debug('Binary data service init complete');
 		await this.initDataDeduplicationService();
@@ -245,7 +251,7 @@ export class Start extends BaseCommand<z.infer<typeof flagsSchema>> {
 			await this.generateStaticAssets();
 		}
 
-		await this.moduleRegistry.initModules();
+		await this.moduleRegistry.initModules(this.instanceSettings.instanceType);
 
 		if (this.instanceSettings.isMultiMain) {
 			// we instantiate `PrometheusMetricsService` early to register its multi-main event handlers
@@ -293,34 +299,6 @@ export class Start extends BaseCommand<z.infer<typeof flagsSchema>> {
 			}
 		}
 
-		if (flags.tunnel) {
-			this.log('\nWaiting for tunnel ...');
-
-			let tunnelSubdomain =
-				process.env.N8N_TUNNEL_SUBDOMAIN ?? this.instanceSettings.tunnelSubdomain ?? '';
-
-			if (tunnelSubdomain === '') {
-				// When no tunnel subdomain did exist yet create a new random one
-				tunnelSubdomain = randomString(24).toLowerCase();
-
-				this.instanceSettings.update({ tunnelSubdomain });
-			}
-
-			const { default: localtunnel } = await import('@n8n/localtunnel');
-			const { port } = this.globalConfig;
-
-			const webhookTunnel = await localtunnel(port, {
-				host: 'https://hooks.n8n.cloud',
-				subdomain: tunnelSubdomain,
-			});
-
-			process.env.WEBHOOK_URL = `${webhookTunnel.url}/`;
-			this.log(`Tunnel URL: ${process.env.WEBHOOK_URL}\n`);
-			this.log(
-				'IMPORTANT! Do not share with anybody as it would give people access to your n8n instance!',
-			);
-		}
-
 		if (this.globalConfig.database.isLegacySqlite) {
 			// Employ lazy loading to avoid unnecessary imports in the CLI
 			// and to ensure that the legacy recovery service is only used when needed.
@@ -334,7 +312,7 @@ export class Start extends BaseCommand<z.infer<typeof flagsSchema>> {
 
 		Container.get(ExecutionsPruningService).init();
 
-		if (config.getEnv('executions.mode') === 'regular') {
+		if (this.globalConfig.executions.mode === 'regular') {
 			await this.runEnqueuedExecutions();
 		}
 

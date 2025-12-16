@@ -12,6 +12,7 @@ import type {
 	INodeProperties,
 } from 'n8n-workflow';
 import { BINARY_ENCODING, NodeOperationError, Node } from 'n8n-workflow';
+import * as a from 'node:assert';
 import { pipeline } from 'stream/promises';
 import { file as tmpFile } from 'tmp-promise';
 import { v4 as uuid } from 'uuid';
@@ -59,7 +60,7 @@ export class Webhook extends Node {
 			header: '',
 			executionsHelp: {
 				inactive:
-					'Webhooks have two modes: test and production. <br /> <br /> <b>Use test mode while you build your workflow</b>. Click the \'listen\' button, then make a request to the test URL. The executions will show up in the editor.<br /> <br /> <b>Use production mode to run your workflow automatically</b>. <a data-key="activate">Activate</a> the workflow, then make requests to the production URL. These executions will show up in the executions list, but not in the editor.',
+					"Webhooks have two modes: test and production. <br /> <br /> <b>Use test mode while you build your workflow</b>. Click the 'listen' button, then make a request to the test URL. The executions will show up in the editor.<br /> <br /> <b>Use production mode to run your workflow automatically</b>. Publish the workflow, then make requests to the production URL. These executions will show up in the executions list, but not in the editor.",
 				active:
 					'Webhooks have two modes: test and production. <br /> <br /> <b>Use test mode while you build your workflow</b>. Click the \'listen\' button, then make a request to the test URL. The executions will show up in the editor.<br /> <br /> <b>Use production mode to run your workflow automatically</b>. Since the workflow is activated, you can make requests to the production URL. These executions will show up in the <a data-key="executions">executions list</a>, but not in the editor.',
 			},
@@ -316,6 +317,7 @@ export class Webhook extends Node {
 		prepareOutput: (data: INodeExecutionData) => INodeExecutionData[][],
 	) {
 		const req = context.getRequestObject() as MultiPartFormData.Request;
+		a.ok(req.contentType === 'multipart/form-data', 'Expected multipart/form-data');
 		const options = context.getNodeParameter('options', {}) as IDataObject;
 		const { data, files } = req.body;
 

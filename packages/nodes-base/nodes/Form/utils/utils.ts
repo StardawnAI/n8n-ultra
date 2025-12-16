@@ -1,5 +1,6 @@
 import type { Response } from 'express';
 import isbot from 'isbot';
+import * as a from 'node:assert';
 import { DateTime } from 'luxon';
 import type {
 	INodeExecutionData,
@@ -14,6 +15,7 @@ import {
 	FORM_TRIGGER_NODE_TYPE,
 	NodeOperationError,
 	WAIT_NODE_TYPE,
+	WorkflowConfigurationError,
 	jsonParse,
 } from 'n8n-workflow';
 import sanitize from 'sanitize-html';
@@ -54,6 +56,14 @@ export function sanitizeHtml(text: string) {
 			'ol',
 			'li',
 			'p',
+			'table',
+			'thead',
+			'tbody',
+			'tfoot',
+			'td',
+			'tr',
+			'th',
+			'br',
 		],
 		allowedAttributes: {
 			a: ['href', 'target', 'rel'],
@@ -69,6 +79,8 @@ export function sanitizeHtml(text: string) {
 				'referrerpolicy',
 			],
 			source: ['src', 'type'],
+			td: ['colspan', 'rowspan', 'scope', 'headers'],
+			th: ['colspan', 'rowspan', 'scope', 'headers'],
 		},
 		allowedSchemes: ['https', 'http'],
 		allowedSchemesByTag: {
@@ -185,14 +197,14 @@ export function prepareFormData({
 	}
 
 	for (const [index, field] of formFields.entries()) {
-		const { fieldType, requiredField, multiselect, placeholder } = field;
+		const { fieldType, requiredField, multiselect, placeholder, defaultValue } = field;
 
 		const input: FormField = {
 			id: `field-${index}`,
 			errorId: `error-field-${index}`,
 			label: field.fieldLabel,
 			inputRequired: requiredField ? 'form-required' : '',
-			defaultValue: query[field.fieldLabel] ?? '',
+			defaultValue: query[field.fieldLabel] ?? defaultValue ?? '',
 			placeholder,
 		};
 
@@ -262,9 +274,9 @@ export const validateResponseModeConfiguration = (context: IWebhookFunctions) =>
 	}
 
 	if (isRespondToWebhookConnected && responseMode !== 'responseNode' && nodeVersion <= 2.1) {
-		throw new NodeOperationError(
+		throw new WorkflowConfigurationError(
 			context.getNode(),
-			new Error(`${context.getNode().name} node not correctly configured`),
+			new Error('Unused Respond to Webhook node found in the workflow'),
 			{
 				description:
 					'Set the “Respond When” parameter to “Using Respond to Webhook Node” or remove the Respond to Webhook node',
@@ -324,8 +336,9 @@ export function addFormResponseDataToReturnItem(
 				value = value[0];
 			}
 		}
-		if (field.fieldType === 'date' && value && field.formatDate !== '') {
-			value = DateTime.fromFormat(String(value), 'yyyy-mm-dd').toFormat(field.formatDate as string);
+		if (field.fieldType === 'date' && value && field.formatDate) {
+			const datetime = DateTime.fromFormat(String(value), 'yyyy-mm-dd');
+			value = datetime.toFormat(field.formatDate as string);
 		}
 		if (field.fieldType === 'file' && field.multipleFiles && !Array.isArray(value)) {
 			value = [value];
@@ -341,6 +354,8 @@ export async function prepareFormReturnItem(
 	mode: 'test' | 'production',
 	useWorkflowTimezone: boolean = false,
 ) {
+	const req = context.getRequestObject() as MultiPartFormData.Request;
+	a.ok(req.contentType === 'multipart/form-data', 'Expected multipart/form-data');
 	const bodyData = (context.getBodyData().data as IDataObject) ?? {};
 	const files = (context.getBodyData().files as IDataObject) ?? {};
 
