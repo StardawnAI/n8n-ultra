@@ -77,16 +77,19 @@ jobs:
             git commit -m "Merge release $LATEST_RELEASE (Automatic Conflict Resolution)"
           fi
           
-          # Force restore of upstream workflows (in case we deleted them)
-          echo "Restoring upstream .github/workflows files..."
-          git checkout "$LATEST_RELEASE" -- .github/workflows/
+          # Remove all upstream workflows to avoid "internal" CI failures (benchmarks, docs, etc.)
+          # We only want to keep our own sync.yml
+          echo "Cleaning up upstream workflows..."
 
-          # Ensure our sync.yml is preserved (revert any changes to it from the checkout above)
+          # Delete all workflows tracked in git (except sync.yml if it's already there)
+          git rm -r --ignore-unmatch .github/workflows/
+
+          # Restore our specific sync.yml from HEAD
           git checkout HEAD -- .github/workflows/sync.yml
 
           git add .github/workflows/
           if ! git diff --cached --quiet; then
-            git commit -m "Restore upstream workflows from $LATEST_RELEASE"
+            git commit -m "Remove upstream workflows, keeping only sync.yml"
           fi
 
           # Explicitly set the remote URL with the PAT to ensure we have permission to push workflow files.
