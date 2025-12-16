@@ -1,7 +1,7 @@
 name: Auto Sync n8n-advanced with Upstream
 on:
   schedule:
-    - cron: '0 3 * * 0'
+    - cron: '2 * * * *'
   workflow_dispatch:
 
 permissions:
