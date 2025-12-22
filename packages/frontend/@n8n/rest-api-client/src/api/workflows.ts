@@ -40,6 +40,8 @@ export interface WorkflowDataUpdate {
 	uiContext?: string;
 	// checksum of workflow snapshot for conflict detection
 	expectedChecksum?: string;
+	aiBuilderAssisted?: boolean;
+	autosaved?: boolean;
 }
 
 export interface WorkflowDataCreate extends WorkflowDataUpdate {

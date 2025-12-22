@@ -110,6 +110,10 @@ export class SidebarPage {
 		return this.page.getByTestId('banners-TRIAL');
 	}
 
+	getMainSidebarTrialUpgrade(): Locator {
+		return this.page.getByTestId('main-sidebar-trial-upgrade');
+	}
+
 	getTemplatesLink(): Locator {
 		return this.page.getByTestId('main-sidebar-templates').locator('a');
 	}
@@ -138,6 +142,9 @@ export class SidebarPage {
 	}
 
 	async expand() {
+		// First ensure the sidebar is visible before checking if it is expanded
+		await expect(this.getSettings()).toBeVisible();
+
 		const logo = this.page.getByTestId('n8n-logo');
 		const isExpanded = await logo.isVisible();
 

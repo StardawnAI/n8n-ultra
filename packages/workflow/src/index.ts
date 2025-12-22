@@ -53,6 +53,7 @@ export {
 	setSafeObjectProperty,
 	isDomainAllowed,
 	isCommunityPackageName,
+	dedupe,
 } from './utils';
 export {
 	isINodeProperties,
@@ -74,7 +75,7 @@ export {
 	type ExtractableSubgraphData,
 	type IConnectionAdjacencyList as AdjacencyList,
 } from './graph/graph-utils';
-export { ExpressionExtensions } from './extensions';
+export { ExpressionExtensions, type Alias, type AliasCompletion } from './extensions';
 export * as ExpressionParser from './extensions/expression-parser';
 export { NativeMethods } from './native-methods';
 export * from './node-parameters/filter-parameter';

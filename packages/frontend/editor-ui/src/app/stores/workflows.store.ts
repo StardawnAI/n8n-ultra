@@ -93,6 +93,7 @@ import { isChatNode } from '@/app/utils/aiUtils';
 import { snapPositionToGrid } from '@/app/utils/nodeViewUtils';
 import { useSourceControlStore } from '@/features/integrations/sourceControl.ee/sourceControl.store';
 import { getResourcePermissions } from '@n8n/permissions';
+import { hasRole } from '@/app/utils/rbac/checks';
 
 const defaults: Omit<IWorkflowDb, 'id'> & { settings: NonNullable<IWorkflowDb['settings']> } = {
 	name: '',
@@ -365,6 +366,10 @@ export const useWorkflowsStore = defineStore(STORES.WORKFLOWS, () => {
 			workflowTriggerNodes.value.some((node) => node.name === name),
 		);
 	});
+
+	const canViewWorkflows = computed(
+		() => !settingsStore.isChatFeatureEnabled || !hasRole(['global:chatUser']),
+	);
 
 	/**
 	 * Sets the active execution id
@@ -744,8 +749,11 @@ export const useWorkflowsStore = defineStore(STORES.WORKFLOWS, () => {
 		}, {});
 	}
 
-	function setWorkflowVersionId(versionId: string) {
+	function setWorkflowVersionId(versionId: string, newChecksum?: string) {
 		workflow.value.versionId = versionId;
+		if (newChecksum) {
+			workflowChecksum.value = newChecksum;
+		}
 	}
 
 	function setWorkflowChecksum(checksum: string) {
@@ -860,6 +868,9 @@ export const useWorkflowsStore = defineStore(STORES.WORKFLOWS, () => {
 			'POST',
 			`/workflows/${id}/archive`,
 		);
+		if (!updatedWorkflow.checksum) {
+			throw new Error('Failed to archive workflow');
+		}
 		if (workflowsById.value[id]) {
 			workflowsById.value[id].isArchived = true;
 			workflowsById.value[id].versionId = updatedWorkflow.versionId;
@@ -873,7 +884,7 @@ export const useWorkflowsStore = defineStore(STORES.WORKFLOWS, () => {
 
 		if (id === workflow.value.id) {
 			setIsArchived(true);
-			setWorkflowVersionId(updatedWorkflow.versionId);
+			setWorkflowVersionId(updatedWorkflow.versionId, updatedWorkflow.checksum);
 		}
 	}
 
@@ -883,6 +894,9 @@ export const useWorkflowsStore = defineStore(STORES.WORKFLOWS, () => {
 			'POST',
 			`/workflows/${id}/unarchive`,
 		);
+		if (!updatedWorkflow.checksum) {
+			throw new Error('Failed to unarchive workflow');
+		}
 		if (workflowsById.value[id]) {
 			workflowsById.value[id].isArchived = false;
 			workflowsById.value[id].versionId = updatedWorkflow.versionId;
@@ -895,7 +909,7 @@ export const useWorkflowsStore = defineStore(STORES.WORKFLOWS, () => {
 
 		if (id === workflow.value.id) {
 			setIsArchived(false);
-			setWorkflowVersionId(updatedWorkflow.versionId);
+			setWorkflowVersionId(updatedWorkflow.versionId, updatedWorkflow.checksum);
 		}
 	}
 
@@ -912,7 +926,7 @@ export const useWorkflowsStore = defineStore(STORES.WORKFLOWS, () => {
 	function setWorkflowActive(
 		targetWorkflowId: string,
 		activeVersion: WorkflowHistory,
-		clearDirtyState: boolean = true,
+		clearDirtyState: boolean,
 	) {
 		if (activeWorkflows.value.indexOf(targetWorkflowId) === -1) {
 			activeWorkflows.value.push(targetWorkflowId);
@@ -1594,6 +1608,12 @@ export const useWorkflowsStore = defineStore(STORES.WORKFLOWS, () => {
 		// make sure that the new ones are not active
 		sendData.active = false;
 
+		// When activation is false, ensure MCP is disabled
+		if (!sendData.settings) {
+			sendData.settings ??= {};
+		}
+		sendData.settings.availableInMCP = false;
+
 		const projectStore = useProjectsStore();
 
 		if (!sendData.projectId && projectStore.currentProjectId) {
@@ -1637,6 +1657,14 @@ export const useWorkflowsStore = defineStore(STORES.WORKFLOWS, () => {
 			data as unknown as IDataObject,
 		);
 
+		if (!updatedWorkflow.checksum) {
+			throw new Error('Failed to update workflow');
+		}
+
+		if (id === workflow.value.id) {
+			setWorkflowVersionId(updatedWorkflow.versionId, updatedWorkflow.checksum);
+		}
+
 		if (
 			workflowHelpers.containsNodeFromPackage(updatedWorkflow, AI_NODES_PACKAGE_NAME) &&
 			!usersStore.isEasyAIWorkflowOnboardingDone
@@ -1670,8 +1698,15 @@ export const useWorkflowsStore = defineStore(STORES.WORKFLOWS, () => {
 			'POST',
 			`/workflows/${id}/deactivate`,
 		);
+		if (!updatedWorkflow.checksum) {
+			throw new Error('Failed to deactivate workflow');
+		}
 
 		setWorkflowInactive(id);
+
+		if (id === workflow.value.id) {
+			setWorkflowVersionId(updatedWorkflow.versionId, updatedWorkflow.checksum);
+		}
 
 		return updatedWorkflow;
 	}
@@ -1775,6 +1810,11 @@ export const useWorkflowsStore = defineStore(STORES.WORKFLOWS, () => {
 				description: updated.description,
 				versionId: updated.versionId,
 			};
+		}
+
+		// Update local store state
+		if (isCurrentWorkflow) {
+			setDescription(updated.description ?? '');
 		}
 
 		return updated;
@@ -2038,8 +2078,6 @@ export const useWorkflowsStore = defineStore(STORES.WORKFLOWS, () => {
 		addNodeExecutionStartedData,
 		setUsedCredentials,
 		setWorkflowVersionId,
-		setWorkflowChecksum,
-		updateWorkflowChecksum,
 		setWorkflowActiveVersion,
 		replaceInvalidWorkflowCredentials,
 		assignCredentialToMatchingNodes,
@@ -2106,6 +2144,7 @@ export const useWorkflowsStore = defineStore(STORES.WORKFLOWS, () => {
 		fetchLastSuccessfulExecution,
 		lastSuccessfulExecution,
 		getWebhookUrl,
+		canViewWorkflows,
 		defaults,
 		// This is exposed to ease the refactoring to the injected workflowState composable
 		// Please do not use outside this context

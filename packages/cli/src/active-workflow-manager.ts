@@ -141,21 +141,6 @@ export class ActiveWorkflowManager {
 	}
 
 	/**
-	 * Returns if the workflow is stored as `active`.
-	 *
-	 * @important Do not confuse with `ActiveWorkflows.isActive()`,
-	 * which checks if the workflow is active in memory.
-	 */
-	async isActive(workflowId: WorkflowId) {
-		const workflow = await this.workflowRepository.findOne({
-			select: ['activeVersionId'],
-			where: { id: workflowId },
-		});
-
-		return !!workflow?.activeVersionId;
-	}
-
-	/**
 	 * Register workflow-defined webhooks in the `workflow_entity` table.
 	 */
 	async addWebhooks(
@@ -280,7 +265,10 @@ export class ActiveWorkflowManager {
 
 		const mode = 'internal';
 
-		const additionalData = await WorkflowExecuteAdditionalData.getBase({ workflowId: workflow.id });
+		const additionalData = await WorkflowExecuteAdditionalData.getBase({
+			workflowId: workflow.id,
+			workflowSettings: workflowData.settings,
+		});
 
 		const webhooks = WebhookHelpers.getWorkflowWebhooks(workflow, additionalData, undefined, true);
 
@@ -642,6 +630,7 @@ export class ActiveWorkflowManager {
 
 			const additionalData = await WorkflowExecuteAdditionalData.getBase({
 				workflowId: workflow.id,
+				workflowSettings: dbWorkflow.settings,
 			});
 
 			if (shouldAddWebhooks) {

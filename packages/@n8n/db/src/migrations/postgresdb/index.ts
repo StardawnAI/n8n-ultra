@@ -46,6 +46,7 @@ import { AddProjectIdToVariableTable1758794506893 } from './1758794506893-AddPro
 import { AddWorkflowVersionColumn1761047826451 } from './1761047826451-AddWorkflowVersionColumn';
 import { ChangeDependencyInfoToJson1761655473000 } from './1761655473000-ChangeDependencyInfoToJson';
 import { ChangeDefaultForIdInUserTable1762771264000 } from './1762771264000-ChangeDefaultForIdInUserTable';
+import { ConvertAgentIdToUuid1765804780000 } from './1765804780000-ConvertAgentIdToUuid';
 import { CreateLdapEntities1674509946020 } from '../common/1674509946020-CreateLdapEntities';
 import { PurgeInvalidWorkflowConnections1675940580449 } from '../common/1675940580449-PurgeInvalidWorkflowConnections';
 import { RemoveResetPasswordColumns1690000000030 } from '../common/1690000000030-RemoveResetPasswordColumns';

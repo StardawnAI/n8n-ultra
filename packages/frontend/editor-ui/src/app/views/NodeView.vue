@@ -1629,6 +1629,10 @@ function checkIfEditingIsAllowed(): boolean {
 		return false;
 	}
 
+	if (!(workflowPermissions.value.update ?? projectPermissions.value.workflow.update)) {
+		return false;
+	}
+
 	if (isReadOnlyRoute.value || isReadOnlyEnvironment.value) {
 		const messageContext = isReadOnlyRoute.value ? 'executions' : 'workflows';
 		readOnlyNotification.value = toast.showMessage({
@@ -1893,6 +1897,11 @@ watch(
 );
 
 onBeforeRouteLeave(async (to, from, next) => {
+	// Close the focus panel when leaving the workflow view
+	if (focusPanelStore.focusPanelActive) {
+		focusPanelStore.closeFocusPanel();
+	}
+
 	const toNodeViewTab = getNodeViewTab(to);
 
 	if (
@@ -1997,6 +2006,7 @@ onActivated(() => {
 onDeactivated(() => {
 	uiStore.closeModal(WORKFLOW_SETTINGS_MODAL_KEY);
 	removeUndoRedoEventBindings();
+	toast.clearAllStickyNotifications();
 });
 
 onBeforeUnmount(() => {
@@ -2137,7 +2147,7 @@ onBeforeUnmount(() => {
 				v-if="builderStore.streaming"
 				:class="$style.thinkingPill"
 				show-stop
-				@stop="builderStore.stopStreaming"
+				@stop="builderStore.abortStreaming"
 			/>
 
 			<Suspense>

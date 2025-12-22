@@ -232,7 +232,9 @@ export class WorkflowService {
 			forceSave?: boolean;
 			publicApi?: boolean;
 			publishIfActive?: boolean;
+			aiBuilderAssisted?: boolean;
 			expectedChecksum?: string;
+			autosaved?: boolean;
 		} = {},
 	): Promise<WorkflowEntity> {
 		const {
@@ -242,6 +244,8 @@ export class WorkflowService {
 			forceSave = false,
 			publicApi = false,
 			publishIfActive = false,
+			aiBuilderAssisted = false,
+			autosaved = false,
 		} = options;
 		const workflow = await this.workflowFinderService.findWorkflowForUser(
 			workflowId,
@@ -349,14 +353,19 @@ export class WorkflowService {
 			// do not update active fields
 		];
 
-		const updatePayload: QueryDeepPartialEntity<WorkflowEntity> = pick(
+		const updatePayload = pick(
 			workflowUpdateData,
 			fieldsToUpdate,
-		);
+		) as QueryDeepPartialEntity<WorkflowEntity>;
 
 		// Save the workflow to history first, so we can retrieve the complete version object for the update
 		if (saveNewVersion) {
-			await this.workflowHistoryService.saveVersion(user, workflowUpdateData, workflowId);
+			await this.workflowHistoryService.saveVersion(
+				user,
+				workflowUpdateData,
+				workflowId,
+				autosaved,
+			);
 		}
 
 		const publishCurrent = workflow.activeVersionId && publishIfActive;
@@ -411,6 +420,8 @@ export class WorkflowService {
 			user,
 			workflow: updatedWorkflow,
 			publicApi,
+			previousWorkflow: workflow,
+			aiBuilderAssisted,
 		});
 
 		// Activate workflow if requested, or

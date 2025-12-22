@@ -149,6 +149,7 @@ export interface ICredentialsDecrypted<T extends object = ICredentialDataDecrypt
 	homeProject?: ProjectSharingData;
 	sharedWithProjects?: ProjectSharingData[];
 	isGlobal?: boolean;
+	isResolvable?: boolean;
 }
 
 export interface ICredentialsEncrypted {
@@ -694,14 +695,30 @@ export interface BaseHelperFunctions {
 	returnJsonArray(jsonData: IDataObject | IDataObject[]): INodeExecutionData[];
 }
 
+const __brand = Symbol('resolvedFilePath');
+
+export type ResolvedFilePath = string & {
+	[__brand]: 'ResolvedFilePath';
+};
+
 export interface FileSystemHelperFunctions {
-	isFilePathBlocked(filePath: string): Promise<boolean>;
-	createReadStream(path: PathLike): Promise<Readable>;
+	resolvePath(path: PathLike): Promise<ResolvedFilePath>;
+	/**
+	 * Use {@link resolvePath} to resolve the path first.
+	 */
+	isFilePathBlocked(filePath: ResolvedFilePath): boolean;
+	/**
+	 * Use {@link resolvePath} to resolve the path first.
+	 */
+	createReadStream(filePath: ResolvedFilePath): Promise<Readable>;
 	getStoragePath(): string;
+	/**
+	 * Use {@link resolvePath} to resolve the path first.
+	 */
 	writeContentToFile(
-		path: PathLike,
+		path: ResolvedFilePath,
 		content: string | Buffer | Readable,
-		flag?: string,
+		flag?: number,
 	): Promise<void>;
 }
 
@@ -934,7 +951,7 @@ export interface FunctionsBase {
 	getMode?: () => WorkflowExecuteMode;
 	getActivationMode?: () => WorkflowActivateMode;
 	getChatTrigger: () => INode | null;
-
+	isNodeFeatureEnabled(featureName: string): boolean;
 	getExecutionContext: () => IExecutionContext | undefined;
 
 	/** @deprecated */
@@ -1532,12 +1549,17 @@ export type DisplayCondition =
 	| { _cnd: { regex: string } }
 	| { _cnd: { exists: true } };
 
+export type NodeFeatures = Record<string, boolean>;
+export type FeatureCondition = { '@version': Array<number | DisplayCondition> };
+export type NodeFeaturesDefinition = Record<string, FeatureCondition>;
+
 export interface IDisplayOptions {
 	hide?: {
 		[key: string]: Array<NodeParameterValue | DisplayCondition> | undefined;
 	};
 	show?: {
 		'@version'?: Array<number | DisplayCondition>;
+		'@feature'?: Array<string | DisplayCondition>;
 		'@tool'?: boolean[];
 		[key: string]: Array<NodeParameterValue | DisplayCondition> | undefined;
 	};
@@ -1587,12 +1609,23 @@ export interface INodeProperties {
 	ignoreValidationDuringExecution?: boolean;
 	// for type: options | multiOptions – skip validation of the value (e.g. when value is not in the list and specified via expression)
 	allowArbitraryValues?: boolean;
+	// This field indicates that the field is a resolvable field that should be resolved in dynamic credential setup
+	resolvableField?: boolean;
 }
 
 export interface INodePropertyModeTypeOptions {
 	searchListMethod?: string; // Supported by: options
 	searchFilterRequired?: boolean;
 	searchable?: boolean;
+	/**
+	 * If provided, a slow load notice will be shown to the user if the resource locator takes longer than the timeout to load.
+	 * @example
+	 * {
+	 *   message: 'If loading takes longer than expected, try selecting a resource using "By ID"',
+	 *   timeout: 10000,
+	 * }
+	 */
+	slowLoadNotice?: { message: string; timeout: number };
 	/**
 	 * If true, the resource locator will not show an error if the credentials are not selected
 	 */
@@ -2213,6 +2246,7 @@ export interface INodeTypeDescription extends INodeTypeBaseDescription {
 	communityNodePackageVersion?: string;
 	waitingNodeTooltip?: string;
 	__loadOptionsMethods?: string[]; // only for validation during build
+	features?: NodeFeaturesDefinition;
 }
 
 export type TriggerPanelDefinition = {
@@ -2760,6 +2794,7 @@ export interface IWorkflowSettings {
 	timeSavedPerExecution?: number;
 	timeSavedMode?: 'fixed' | 'dynamic';
 	availableInMCP?: boolean;
+	credentialResolverId?: string;
 }
 
 export interface WorkflowFEMeta {

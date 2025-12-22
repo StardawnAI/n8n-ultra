@@ -46,6 +46,9 @@ import { AddScopesColumnToApiKeys1742918400000 } from './1742918400000-AddScopes
 import { AddProjectIdToVariableTable1758794506893 } from './1758794506893-AddProjectIdToVariableTable';
 import { AddWorkflowVersionColumn1761047826451 } from './1761047826451-AddWorkflowVersionColumn';
 import { ChangeDependencyInfoToJson1761655473000 } from './1761655473000-ChangeDependencyInfoToJson';
+import { AddCreatorIdToProjectTable1764276827837 } from './1764276827837-AddCreatorIdToProjectTable';
+import { AddResolvableFieldsToCredentials1764689448000 } from './1764689448000-AddResolvableFieldsToCredentials';
+import { AddAgentIdForeignKeys1765886667897 } from './1765886667897-AddAgentIdForeignKeys';
 import { UniqueWorkflowNames1620821879465 } from '../common/1620821879465-UniqueWorkflowNames';
 import { UpdateWorkflowCredentials1630330987096 } from '../common/1630330987096-UpdateWorkflowCredentials';
 import { AddNodeIds1658930531669 } from '../common/1658930531669-AddNodeIds';

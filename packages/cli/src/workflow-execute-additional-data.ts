@@ -226,14 +226,17 @@ async function startExecution(
 
 		// Create new additionalData to have different workflow loaded and to call
 		// different webhooks
+		const workflowSettings = workflowData.settings;
 		const additionalDataIntegrated = await getBase({
 			workflowId: workflowData.id,
+			workflowSettings,
 		});
 		additionalDataIntegrated.hooks = getLifecycleHooksForSubExecutions(
 			runData.executionMode,
 			executionId,
 			workflowData,
 			additionalData.userId,
+			options.parentExecution,
 		);
 		additionalDataIntegrated.executionId = executionId;
 		additionalDataIntegrated.parentCallbackManager = options.parentCallbackManager;
@@ -249,7 +252,6 @@ async function startExecution(
 		additionalDataIntegrated.streamingEnabled = additionalData.streamingEnabled;
 
 		let subworkflowTimeout = additionalData.executionTimeoutTimestamp;
-		const workflowSettings = workflowData.settings;
 		if (workflowSettings?.executionTimeout !== undefined && workflowSettings.executionTimeout > 0) {
 			// We might have received a max timeout timestamp from the parent workflow
 			// If we did, then we get the minimum time between the two timeouts
@@ -384,12 +386,14 @@ export async function getBase({
 	projectId,
 	currentNodeParameters,
 	executionTimeoutTimestamp,
+	workflowSettings,
 }: {
 	userId?: string;
 	workflowId?: string;
 	projectId?: string;
 	currentNodeParameters?: INodeParameters;
 	executionTimeoutTimestamp?: number;
+	workflowSettings?: IWorkflowSettings;
 } = {}): Promise<IWorkflowExecuteAdditionalData> {
 	const urlBaseWebhook = Container.get(UrlService).getWebhookBaseUrl();
 
@@ -414,6 +418,7 @@ export async function getBase({
 		userId,
 		setExecutionStatus,
 		variables,
+		workflowSettings,
 		async getRunExecutionData(executionId) {
 			const executionRepository = Container.get(ExecutionRepository);
 			const executionData = await executionRepository.findSingleExecution(executionId, {

@@ -38,7 +38,7 @@ import { v4 as uuid } from 'uuid';
 import { saveCredential } from '../shared/db/credentials';
 import { createCustomRoleWithScopeSlugs, cleanupRolesAndScopes } from '../shared/db/roles';
 import { assignTagToWorkflow, createTag } from '../shared/db/tags';
-import { createManyUsers, createMember, createOwner } from '../shared/db/users';
+import { createChatUser, createManyUsers, createMember, createOwner } from '../shared/db/users';
 import { createWorkflowHistoryItem } from '../shared/db/workflow-history';
 import type { SuperAgentTest } from '../shared/types';
 import * as utils from '../shared/utils/';
@@ -56,7 +56,6 @@ let anotherMember: User;
 
 let authOwnerAgent: SuperAgentTest;
 let authMemberAgent: SuperAgentTest;
-
 const testServer = utils.setupTestServer({
 	endpointGroups: ['workflows'],
 	enabledFeatures: ['feat:sharing'],
@@ -84,6 +83,7 @@ beforeEach(async () => {
 		'Folder',
 		'WorkflowEntity',
 		'WorkflowHistory',
+		'WorkflowPublishHistory',
 		'TagEntity',
 		'Project',
 		'User',
@@ -171,6 +171,7 @@ describe('POST /workflows', () => {
 			[
 				'workflow:delete',
 				'workflow:execute',
+				'workflow:execute-chat',
 				'workflow:move',
 				'workflow:read',
 				'workflow:share',
@@ -444,6 +445,29 @@ describe('POST /workflows', () => {
 			.authAgentFor(member)
 			.post('/workflows')
 			.send({ ...workflow, projectId: project.id })
+			//
+			// ASSERT
+			//
+			.expect(400, {
+				code: 400,
+				message: "You don't have the permissions to save the workflow in this project.",
+			});
+	});
+
+	test('does not create the workflow in a personal project if the user is chat user', async () => {
+		//
+		// ARRANGE
+		//
+		const chatUser = await createChatUser();
+		const workflow = makeWorkflow();
+
+		//
+		// ACT
+		//
+		await testServer
+			.authAgentFor(chatUser)
+			.post('/workflows')
+			.send({ ...workflow })
 			//
 			// ASSERT
 			//
@@ -801,6 +825,7 @@ describe('GET /workflows', () => {
 				[
 					'workflow:delete',
 					'workflow:execute',
+					'workflow:execute-chat',
 					'workflow:move',
 					'workflow:read',
 					'workflow:update',
@@ -809,7 +834,9 @@ describe('GET /workflows', () => {
 
 			// Shared workflow
 			expect(wf2.id).toBe(savedWorkflow2.id);
-			expect(wf2.scopes).toEqual(['workflow:read', 'workflow:update', 'workflow:execute'].sort());
+			expect(wf2.scopes).toEqual(
+				['workflow:read', 'workflow:update', 'workflow:execute', 'workflow:execute-chat'].sort(),
+			);
 		}
 
 		{
@@ -827,6 +854,7 @@ describe('GET /workflows', () => {
 			expect(wf1.scopes).toEqual([
 				'workflow:delete',
 				'workflow:execute',
+				'workflow:execute-chat',
 				'workflow:read',
 				'workflow:update',
 			]);
@@ -837,6 +865,7 @@ describe('GET /workflows', () => {
 				[
 					'workflow:delete',
 					'workflow:execute',
+					'workflow:execute-chat',
 					'workflow:move',
 					'workflow:read',
 					'workflow:share',
@@ -862,6 +891,7 @@ describe('GET /workflows', () => {
 					'workflow:create',
 					'workflow:delete',
 					'workflow:execute',
+					'workflow:execute-chat',
 					'workflow:list',
 					'workflow:move',
 					'workflow:read',
@@ -877,6 +907,7 @@ describe('GET /workflows', () => {
 					'workflow:create',
 					'workflow:delete',
 					'workflow:execute',
+					'workflow:execute-chat',
 					'workflow:list',
 					'workflow:move',
 					'workflow:read',
@@ -1626,7 +1657,7 @@ describe('GET /workflows', () => {
 
 			const response = await authOwnerAgent
 				.get('/workflows')
-				.query('take=2&skip=1')
+				.query('sortBy=name:asc&take=2&skip=1')
 				.query('filter={"query":"Special"}')
 				.expect(200);
 
@@ -1926,6 +1957,7 @@ describe('GET /workflows?includeFolders=true', () => {
 				[
 					'workflow:delete',
 					'workflow:execute',
+					'workflow:execute-chat',
 					'workflow:move',
 					'workflow:read',
 					'workflow:update',
@@ -1934,7 +1966,9 @@ describe('GET /workflows?includeFolders=true', () => {
 
 			// Shared workflow
 			expect(wf2.id).toBe(savedWorkflow2.id);
-			expect(wf2.scopes).toEqual(['workflow:read', 'workflow:update', 'workflow:execute'].sort());
+			expect(wf2.scopes).toEqual(
+				['workflow:read', 'workflow:update', 'workflow:execute', 'workflow:execute-chat'].sort(),
+			);
 
 			expect(f1.id).toBe(savedFolder1.id);
 		}
@@ -1957,6 +1991,7 @@ describe('GET /workflows?includeFolders=true', () => {
 			expect(wf1.scopes).toEqual([
 				'workflow:delete',
 				'workflow:execute',
+				'workflow:execute-chat',
 				'workflow:read',
 				'workflow:update',
 			]);
@@ -1967,6 +2002,7 @@ describe('GET /workflows?includeFolders=true', () => {
 				[
 					'workflow:delete',
 					'workflow:execute',
+					'workflow:execute-chat',
 					'workflow:move',
 					'workflow:read',
 					'workflow:share',
@@ -1997,6 +2033,7 @@ describe('GET /workflows?includeFolders=true', () => {
 					'workflow:create',
 					'workflow:delete',
 					'workflow:execute',
+					'workflow:execute-chat',
 					'workflow:list',
 					'workflow:move',
 					'workflow:read',
@@ -2012,6 +2049,7 @@ describe('GET /workflows?includeFolders=true', () => {
 					'workflow:create',
 					'workflow:delete',
 					'workflow:execute',
+					'workflow:execute-chat',
 					'workflow:list',
 					'workflow:move',
 					'workflow:read',
@@ -2488,7 +2526,7 @@ describe('GET /workflows?includeFolders=true', () => {
 
 			const response = await authOwnerAgent
 				.get('/workflows')
-				.query('take=2&skip=1')
+				.query('sortBy=name:asc&take=2&skip=1')
 				.query('filter={"query":"Special"}&includeFolders=true')
 				.expect(200);
 
@@ -2615,6 +2653,69 @@ describe('PATCH /workflows/:workflowId', () => {
 		const versions = await workflowHistoryRepository.find({ where: { workflowId: id } });
 		expect(versions).toHaveLength(1);
 		expect(versions[0].versionId).toBe(workflow.versionId);
+	});
+
+	test('should set autosaved: true in workflow history when autosaved parameter is sent on update', async () => {
+		const workflow = await createWorkflowWithHistory({}, owner);
+		const payload = {
+			nodes: [
+				{
+					id: 'uuid-5678',
+					parameters: {},
+					name: 'Cron',
+					type: 'n8n-nodes-base.cron',
+					typeVersion: 1,
+					position: [400, 300],
+				},
+			],
+			connections: {},
+			autosaved: true,
+		};
+
+		const response = await authOwnerAgent.patch(`/workflows/${workflow.id}`).send(payload);
+
+		expect(response.statusCode).toBe(200);
+
+		const {
+			data: { id, versionId: updatedVersionId },
+		} = response.body as { data: WorkflowEntity };
+
+		const versions = await workflowHistoryRepository.find({ where: { workflowId: id } });
+		expect(versions).toHaveLength(2);
+		const newVersion = versions.find((v) => v.versionId === updatedVersionId);
+		expect(newVersion).not.toBeNull();
+		expect(newVersion!.autosaved).toBe(true);
+	});
+
+	test('should set autosaved: false in workflow history when autosaved is not sent on update', async () => {
+		const workflow = await createWorkflowWithHistory({}, owner);
+		const payload = {
+			nodes: [
+				{
+					id: 'uuid-5678',
+					parameters: {},
+					name: 'Cron',
+					type: 'n8n-nodes-base.cron',
+					typeVersion: 1,
+					position: [400, 300],
+				},
+			],
+			connections: {},
+		};
+
+		const response = await authOwnerAgent.patch(`/workflows/${workflow.id}`).send(payload);
+
+		expect(response.statusCode).toBe(200);
+
+		const {
+			data: { id, versionId: updatedVersionId },
+		} = response.body as { data: WorkflowEntity };
+
+		const versions = await workflowHistoryRepository.find({ where: { workflowId: id } });
+		expect(versions).toHaveLength(2);
+		const newVersion = versions.find((v) => v.versionId === updatedVersionId);
+		expect(newVersion).not.toBeNull();
+		expect(newVersion!.autosaved).toBe(false);
 	});
 
 	test('should ignore provided version id', async () => {

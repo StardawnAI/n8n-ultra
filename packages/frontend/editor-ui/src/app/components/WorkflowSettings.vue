@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
 import { useToast } from '@/app/composables/useToast';
 import type { ITimeoutHMS, IWorkflowSettings, IWorkflowShortResponse } from '@/Interface';
@@ -9,11 +9,18 @@ import {
 	EnterpriseEditionFeature,
 	PLACEHOLDER_EMPTY_WORKFLOW_ID,
 	WORKFLOW_SETTINGS_MODAL_KEY,
-	TIME_SAVED_NODE_EXPERIMENT,
 	NODE_CREATOR_OPEN_SOURCES,
 	TIME_SAVED_NODE_TYPE,
 } from '@/app/constants';
-import { N8nButton, N8nIcon, N8nInput, N8nOption, N8nSelect, N8nTooltip } from '@n8n/design-system';
+import {
+	N8nButton,
+	N8nIcon,
+	N8nIconButton,
+	N8nInput,
+	N8nOption,
+	N8nSelect,
+	N8nTooltip,
+} from '@n8n/design-system';
 import type { WorkflowSettings } from 'n8n-workflow';
 import { deepCopy } from 'n8n-workflow';
 import { useSettingsStore } from '@/app/stores/settings.store';
@@ -31,8 +38,9 @@ import { useDebounce } from '@/app/composables/useDebounce';
 import { injectWorkflowState } from '@/app/composables/useWorkflowState';
 import { useMcp } from '@/features/ai/mcpAccess/composables/useMcp';
 import { useGlobalLinkActions } from '@/app/composables/useGlobalLinkActions';
-import { usePostHog } from '@/app/stores/posthog.store';
 import { useNodeCreatorStore } from '@/features/shared/nodeCreator/nodeCreator.store';
+import { useEnvFeatureFlag } from '@/features/shared/envFeatureFlag/useEnvFeatureFlag';
+import { useCredentialResolvers } from '@/features/resolvers/composables/useCredentialResolvers';
 
 import { ElCol, ElRow, ElSwitch } from 'element-plus';
 
@@ -44,6 +52,7 @@ const modalBus = createEventBus();
 const telemetry = useTelemetry();
 const { isEligibleForMcpAccess, trackMcpAccessEnabledForWorkflow, mcpTriggerMap } = useMcp();
 const { registerCustomAction, unregisterCustomAction } = useGlobalLinkActions();
+const { check: checkEnvFeatureFlag } = useEnvFeatureFlag();
 
 const rootStore = useRootStore();
 const settingsStore = useSettingsStore();
@@ -51,7 +60,6 @@ const sourceControlStore = useSourceControlStore();
 const workflowsStore = useWorkflowsStore();
 const workflowState = injectWorkflowState();
 const workflowsEEStore = useWorkflowsEEStore();
-const posthogStore = usePostHog();
 const nodeCreatorStore = useNodeCreatorStore();
 
 const isLoading = ref(true);
@@ -67,6 +75,14 @@ const executionOrderOptions = ref<Array<{ key: string; value: string }>>([
 const timezones = ref<Array<{ key: string; value: string }>>([]);
 const workflowSettings = ref<IWorkflowSettings>({} as IWorkflowSettings);
 const workflows = ref<IWorkflowShortResponse[]>([]);
+const credentialResolverSelectRef = ref<InstanceType<typeof N8nSelect> | null>(null);
+
+const {
+	resolvers: credentialResolvers,
+	fetchResolvers: loadCredentialResolvers,
+	openCreateModal,
+	openEditModal,
+} = useCredentialResolvers();
 const executionTimeout = ref(0);
 const maxExecutionTimeout = ref(0);
 const timeoutHMS = ref<ITimeoutHMS>({ hours: 0, minutes: 0, seconds: 0 });
@@ -74,6 +90,7 @@ const timeoutHMS = ref<ITimeoutHMS>({ hours: 0, minutes: 0, seconds: 0 });
 const helpTexts = computed(() => ({
 	errorWorkflow: i18n.baseText('workflowSettings.helpTexts.errorWorkflow'),
 	timezone: i18n.baseText('workflowSettings.helpTexts.timezone'),
+	credentialResolver: i18n.baseText('workflowSettings.helpTexts.credentialResolver'),
 	saveDataErrorExecution: i18n.baseText('workflowSettings.helpTexts.saveDataErrorExecution'),
 	saveDataSuccessExecution: i18n.baseText('workflowSettings.helpTexts.saveDataSuccessExecution'),
 	saveExecutionProgress: i18n.baseText('workflowSettings.helpTexts.saveExecutionProgress'),
@@ -96,6 +113,9 @@ const defaultValues = ref({
 
 const isMCPEnabled = computed(
 	() => settingsStore.isModuleActive('mcp') && settingsStore.moduleSettings.mcp?.mcpAccessEnabled,
+);
+const isCredentialResolverEnabled = computed(() =>
+	checkEnvFeatureFlag.value('DYNAMIC_CREDENTIALS'),
 );
 const readOnlyEnv = computed(() => sourceControlStore.preferences.branchReadOnly);
 const workflowName = computed(() => workflowsStore.workflowName);
@@ -131,15 +151,7 @@ const isEligibleForMcp = computed(() => {
 	return isEligibleForMcpAccess(workflow.value);
 });
 
-const isTimeSavedNodeExperimentEnabled = computed(() => {
-	return posthogStore.isFeatureEnabled(TIME_SAVED_NODE_EXPERIMENT.name);
-});
-
 const savedTimeNodes = computed(() => {
-	if (!isTimeSavedNodeExperimentEnabled.value) {
-		return [];
-	}
-
 	if (!workflow?.value?.nodes) return [];
 	return workflow.value.nodes.filter(
 		(node) => node.type === TIME_SAVED_NODE_TYPE && node.disabled !== true,
@@ -147,10 +159,6 @@ const savedTimeNodes = computed(() => {
 });
 
 const hasSavedTimeNodes = computed(() => {
-	if (!isTimeSavedNodeExperimentEnabled.value) {
-		return false;
-	}
-
 	return savedTimeNodes.value.length > 0;
 });
 
@@ -160,7 +168,7 @@ const timeSavedModeOptions = computed(() => [
 		value: 'fixed' as const,
 	},
 	{
-		label: 'Dynamic (node based)',
+		label: 'Dynamic (uses time saved nodes)',
 		value: 'dynamic' as const,
 	},
 ]);
@@ -362,6 +370,33 @@ const loadWorkflows = async (searchTerm?: string) => {
 	workflows.value = workflowsData;
 };
 
+const handleCreateNewResolver = async () => {
+	// Close the dropdown first
+	credentialResolverSelectRef.value?.blur();
+	await nextTick();
+
+	openCreateModal({
+		onSave: async (resolverId: string) => {
+			await loadCredentialResolvers();
+			workflowSettings.value.credentialResolverId = resolverId;
+		},
+	});
+};
+
+const handleEditResolver = async () => {
+	if (!workflowSettings.value.credentialResolverId) return;
+
+	openEditModal(workflowSettings.value.credentialResolverId, {
+		onSave: loadCredentialResolvers,
+		onDelete: async (deletedResolverId: string) => {
+			await loadCredentialResolvers();
+			if (workflowSettings.value.credentialResolverId === deletedResolverId) {
+				workflowSettings.value.credentialResolverId = undefined;
+			}
+		},
+	});
+};
+
 const { debounce } = useDebounce();
 const debouncedLoadWorkflows = debounce(loadWorkflows, { debounceTime: 300, trailing: true });
 
@@ -507,7 +542,8 @@ onMounted(async () => {
 	isLoading.value = true;
 
 	try {
-		await Promise.all([
+		const promises = [
+			workflowsStore.fetchWorkflow(workflowId.value),
 			loadWorkflows(),
 			loadSaveDataErrorExecutionOptions(),
 			loadSaveDataSuccessExecutionOptions(),
@@ -515,7 +551,13 @@ onMounted(async () => {
 			loadSaveManualOptions(),
 			loadTimezones(),
 			loadWorkflowCallerPolicyOptions(),
-		]);
+		];
+
+		if (isCredentialResolverEnabled.value) {
+			promises.push(loadCredentialResolvers());
+		}
+
+		await Promise.all(promises);
 	} catch (error) {
 		toast.showError(
 			error,
@@ -677,6 +719,61 @@ onBeforeUnmount(() => {
 								</div>
 							</N8nOption>
 						</N8nSelect>
+					</ElCol>
+				</ElRow>
+				<ElRow v-if="isCredentialResolverEnabled" data-test-id="credential-resolver">
+					<ElCol :span="10" :class="$style['setting-name']">
+						{{ i18n.baseText('workflowSettings.credentialResolver') }}
+						<N8nTooltip placement="top">
+							<template #content>
+								<div v-text="helpTexts.credentialResolver"></div>
+							</template>
+							<N8nIcon icon="circle-help" />
+						</N8nTooltip>
+					</ElCol>
+					<ElCol :span="14" class="ignore-key-press-canvas">
+						<div :class="$style['credential-resolver-container']">
+							<N8nSelect
+								ref="credentialResolverSelectRef"
+								v-model="workflowSettings.credentialResolverId"
+								:placeholder="i18n.baseText('workflowSettings.credentialResolver.placeholder')"
+								filterable
+								:disabled="readOnlyEnv || !workflowPermissions.update"
+								:limit-popper-width="true"
+								data-test-id="workflow-settings-credential-resolver"
+							>
+								<N8nOption
+									v-for="resolver in credentialResolvers"
+									:key="resolver.id"
+									:label="resolver.name"
+									:value="resolver.id"
+								>
+								</N8nOption>
+								<template #footer>
+									<button
+										type="button"
+										:class="$style['create-new-button']"
+										:disabled="readOnlyEnv || !workflowPermissions.update"
+										data-test-id="workflow-settings-credential-resolver-create-new"
+										@click="handleCreateNewResolver"
+									>
+										<N8nIcon size="xsmall" icon="plus" />
+										{{ i18n.baseText('workflowSettings.credentialResolver.createNew') }}
+									</button>
+								</template>
+							</N8nSelect>
+							<N8nIconButton
+								v-if="workflowSettings.credentialResolverId"
+								icon="pen"
+								type="tertiary"
+								:text="true"
+								size="small"
+								:disabled="readOnlyEnv || !workflowPermissions.update"
+								:title="i18n.baseText('workflowSettings.credentialResolver.edit')"
+								data-test-id="workflow-settings-credential-resolver-edit"
+								@click="handleEditResolver"
+							/>
+						</div>
 					</ElCol>
 				</ElRow>
 				<div v-if="isSharingEnabled" data-test-id="workflow-caller-policy">
@@ -988,19 +1085,7 @@ onBeforeUnmount(() => {
 						</label>
 					</ElCol>
 					<ElCol :span="14">
-						<div v-if="!isTimeSavedNodeExperimentEnabled" :class="$style['time-saved']">
-							<N8nInput
-								id="timeSavedPerExecution"
-								v-model="workflowSettings.timeSavedPerExecution"
-								:disabled="readOnlyEnv || !workflowPermissions.update"
-								data-test-id="workflow-settings-time-saved-per-execution"
-								type="number"
-								min="0"
-								@update:model-value="updateTimeSavedPerExecution"
-							/>
-							<span>{{ i18n.baseText('workflowSettings.timeSavedPerExecution.hint') }}</span>
-						</div>
-						<div v-else class="ignore-key-press-canvas">
+						<div class="ignore-key-press-canvas">
 							<N8nSelect
 								v-model="workflowSettings.timeSavedMode"
 								:disabled="readOnlyEnv || !workflowPermissions.update"
@@ -1019,12 +1104,9 @@ onBeforeUnmount(() => {
 						</div>
 					</ElCol>
 				</ElRow>
-				<!-- Fixed mode warning section (only shown in fixed mode when nodes exist) -->
-				<ElRow
-					v-if="isTimeSavedNodeExperimentEnabled && workflowSettings.timeSavedMode === 'fixed'"
-				>
+				<ElRow v-if="workflowSettings.timeSavedMode === 'fixed'">
 					<ElCol :span="14" :offset="10">
-						<div :class="$style['time-saved']">
+						<div :class="$style['time-saved-input']">
 							<N8nInput
 								id="timeSavedPerExecution"
 								v-model="workflowSettings.timeSavedPerExecution"
@@ -1038,13 +1120,7 @@ onBeforeUnmount(() => {
 						</div>
 					</ElCol>
 				</ElRow>
-				<ElRow
-					v-if="
-						isTimeSavedNodeExperimentEnabled &&
-						workflowSettings.timeSavedMode === 'fixed' &&
-						hasSavedTimeNodes
-					"
-				>
+				<ElRow v-if="workflowSettings.timeSavedMode === 'fixed' && hasSavedTimeNodes">
 					<ElCol :span="14" :offset="10">
 						<div :class="$style['time-saved-content']">
 							<div :class="$style['time-saved-warning']">
@@ -1063,13 +1139,7 @@ onBeforeUnmount(() => {
 				</ElRow>
 				<!-- Minutes saved section (only shown in fixed mode) -->
 				<!-- Active nodes section (only shown in dynamic mode when nodes exist) -->
-				<ElRow
-					v-if="
-						isTimeSavedNodeExperimentEnabled &&
-						workflowSettings.timeSavedMode === 'dynamic' &&
-						hasSavedTimeNodes
-					"
-				>
+				<ElRow v-if="workflowSettings.timeSavedMode === 'dynamic' && hasSavedTimeNodes">
 					<ElCol :span="14" :offset="10">
 						<div :class="$style['time-saved-content']">
 							<div :class="$style['time-saved-nodes-active']">
@@ -1100,13 +1170,7 @@ onBeforeUnmount(() => {
 					</ElCol>
 				</ElRow>
 				<!-- No nodes detected section (only shown in dynamic mode when no nodes) -->
-				<ElRow
-					v-if="
-						isTimeSavedNodeExperimentEnabled &&
-						workflowSettings.timeSavedMode === 'dynamic' &&
-						!hasSavedTimeNodes
-					"
-				>
+				<ElRow v-if="workflowSettings.timeSavedMode === 'dynamic' && !hasSavedTimeNodes">
 					<ElCol :span="14" :offset="10">
 						<div :class="$style['time-saved-content']">
 							<div :class="$style['time-saved-no-nodes']">
@@ -1191,6 +1255,19 @@ onBeforeUnmount(() => {
 	}
 }
 
+.time-saved-input {
+	display: flex;
+	align-items: center;
+
+	:global(.el-input) {
+		width: var(--spacing--3xl);
+	}
+
+	span {
+		margin-left: var(--spacing--2xs);
+	}
+}
+
 .time-saved-dropdown {
 	margin-bottom: var(--spacing--sm);
 }
@@ -1206,19 +1283,6 @@ onBeforeUnmount(() => {
 	border: var(--border-width) var(--border-style) var(--color--foreground);
 	border-radius: var(--radius);
 	background-color: var(--color--background--light-2);
-}
-
-.time-saved-input {
-	display: flex;
-	align-items: center;
-
-	:global(.el-input) {
-		width: var(--spacing--3xl);
-	}
-
-	span {
-		margin-left: var(--spacing--2xs);
-	}
 }
 
 .time-saved-warning {
@@ -1303,13 +1367,46 @@ onBeforeUnmount(() => {
 	width: 100%;
 }
 
-.inactiveIcon {
+.c {
 	color: var(--color--warning);
 	opacity: 0;
 	transition: opacity 0.2s ease;
 
 	:global(.el-select-dropdown__item):hover & {
 		opacity: 1;
+	}
+}
+
+.credential-resolver-container {
+	display: flex;
+	align-items: center;
+}
+
+.create-new-button {
+	display: flex;
+	width: 100%;
+	gap: var(--spacing--3xs);
+	align-items: center;
+	font-weight: var(--font-weight--bold);
+	padding: var(--spacing--xs) var(--spacing--md);
+	background-color: var(--color--background--light-2);
+	color: var(--color--text--shade-1);
+
+	border: 0;
+	border-top: var(--border);
+	box-shadow: var(--shadow--light);
+	clip-path: inset(-12px 0 0 0);
+
+	&:not([disabled]) {
+		cursor: pointer;
+		&:hover {
+			color: var(--color--primary);
+		}
+	}
+
+	&[disabled] {
+		opacity: 0.5;
+		cursor: not-allowed;
 	}
 }
 </style>
