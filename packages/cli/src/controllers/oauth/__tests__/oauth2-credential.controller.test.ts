@@ -163,8 +163,9 @@ describe('OAuth2CredentialController', () => {
 
 		it('should handle dynamic credential callback successfully', async () => {
 			const { ClientOAuth2 } = await import('@n8n/client-oauth2');
+			const oauthTokenData = { access_token: 'new_token', refresh_token: 'refresh_token' };
 			const mockGetToken = jest.fn().mockResolvedValue({
-				data: { access_token: 'new_token', refresh_token: 'refresh_token' },
+				data: oauthTokenData,
 			});
 			jest.mocked(ClientOAuth2).mockImplementation(
 				() =>
@@ -219,7 +220,9 @@ describe('OAuth2CredentialController', () => {
 			// The controller passes decryptedDataOriginal directly, not the merged oauthTokenData
 			expect(oauthService.saveDynamicCredential).toHaveBeenCalledWith(
 				mockResolvedCredential,
-				mockDecryptedData,
+				{
+					oauthTokenData,
+				},
 				'token123',
 				'resolver-id',
 			);

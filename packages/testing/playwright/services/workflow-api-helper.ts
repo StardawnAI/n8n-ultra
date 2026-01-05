@@ -95,6 +95,8 @@ export class WorkflowApiHelper {
 		workflow: Partial<IWorkflowBase>,
 		options?: { webhookPrefix?: string; idLength?: number },
 	) {
+		delete workflow.id;
+
 		const idLength = options?.idLength ?? 12;
 		const webhookPrefix = options?.webhookPrefix ?? 'test-webhook';
 		const uniqueSuffix = nanoid(idLength);
@@ -177,7 +179,9 @@ export class WorkflowApiHelper {
 
 	async getExecutions(workflowId?: string, limit = 20): Promise<ExecutionListResponse[]> {
 		const params = new URLSearchParams();
-		if (workflowId) params.set('workflowId', workflowId);
+		if (workflowId) {
+			params.set('filter', JSON.stringify({ workflowId }));
+		}
 		params.set('limit', limit.toString());
 		const response = await this.api.request.get('/rest/executions', { params });
 
@@ -205,7 +209,11 @@ export class WorkflowApiHelper {
 		return result.data ?? result;
 	}
 
-	async waitForExecution(workflowId: string, timeoutMs = 10000): Promise<ExecutionListResponse> {
+	async waitForExecution(
+		workflowId: string,
+		timeoutMs = 10000,
+		mode: 'manual' | 'webhook' | 'trigger' | 'integrated' = 'webhook',
+	): Promise<ExecutionListResponse> {
 		const initialExecutions = await this.getExecutions(workflowId, 50);
 		const initialCount = initialExecutions.length;
 		const startTime = Date.now();
@@ -217,7 +225,8 @@ export class WorkflowApiHelper {
 				for (const execution of executions.slice(0, executions.length - initialCount)) {
 					const isCompleted = execution.status === 'success' || execution.status === 'error';
 					const isCorrectWorkflow = execution.workflowId === workflowId;
-					if (isCompleted && isCorrectWorkflow) {
+					const isCorrectMode = execution.mode === mode;
+					if (isCompleted && isCorrectWorkflow && isCorrectMode) {
 						return execution;
 					}
 				}
@@ -226,7 +235,8 @@ export class WorkflowApiHelper {
 			for (const execution of executions) {
 				const isCompleted = execution.status === 'success' || execution.status === 'error';
 				const isCorrectWorkflow = execution.workflowId === workflowId;
-				if (isCompleted && isCorrectWorkflow && execution.mode === 'webhook') {
+				const isCorrectMode = execution.mode === mode;
+				if (isCompleted && isCorrectWorkflow && isCorrectMode) {
 					const executionTime = new Date(
 						execution.startedAt ?? execution.createdAt ?? Date.now(),
 					).getTime();
