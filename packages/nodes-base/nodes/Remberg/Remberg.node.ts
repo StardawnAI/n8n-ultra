@@ -1,0 +1,1097 @@
+import type { IExecuteFunctions } from 'n8n-workflow';
+import type {
+    IHttpRequestMethods,
+    INodeExecutionData,
+    INodeType,
+    INodeTypeDescription,
+} from 'n8n-workflow';
+
+import { executeAssetTypes } from './operations/AssetTypes';
+import { executeAssets } from './operations/Assets';
+import { executeOrganizations } from './operations/Organizations';
+import { executeContacts } from './operations/Contacts';
+import { executeParts } from './operations/Parts';
+import { executeFiles } from './operations/Files';
+import { executeWorkOrders } from './operations/WorkOrders';
+import { executeForms } from './operations/Forms';
+import { executeAiChat } from './operations/AiChat';
+import { executeTickets } from './operations/Tickets';
+
+export class Remberg implements INodeType {
+    description: INodeTypeDescription = {
+        displayName: 'Remberg',
+        name: 'remberg',
+        icon: 'file:Remberg.svg',
+        group: ['output'],
+        version: 1,
+        subtitle: '={{$parameter["operation"] + ": " + $parameter["resource"]}}',
+        description: 'Consume Remberg API',
+        defaults: {
+            name: 'Remberg',
+        },
+        inputs: ['main'],
+        outputs: ['main'],
+        credentials: [
+            {
+                name: 'rembergApi',
+                required: true,
+            },
+        ],
+        
+
+        properties: [
+            {
+                displayName: 'Resource',
+                name: 'resource',
+                type: 'options',
+                noDataExpression: true,
+                options: [
+                    { name: 'Asset-Types', value: 'assetTypes' },
+                    { name: 'Assets', value: 'assets' },
+                    { name: 'Organizations', value: 'organizations' },
+                    { name: 'Contacts', value: 'contacts' },
+                    { name: 'Parts', value: 'parts' },
+                    { name: 'Files', value: 'files' },
+                    { name: 'Work Orders', value: 'workOrders' },
+                    { name: 'Forms', value: 'forms' },
+                    { name: 'AI Chat', value: 'aiChat' },
+                    { name: 'Tickets', value: 'tickets' },
+                    { name: 'Custom API Call', value: 'customCall' },
+                ],
+                default: 'Tickets',
+            },
+            // FILES OPERATIONS
+           {
+                displayName: 'Files Operation',
+                name: 'operation',
+                type: 'options',
+                noDataExpression: true,
+                displayOptions: { show: { resource: ['files'] } },
+                options: [
+                    { name: 'Get All', value: 'getAll', action: 'Get a list of files' },
+                    { name: 'Upload', value: 'upload', action: 'Upload a new file' },
+                    { name: 'Get by ID', value: 'getById', action: 'Get a file by ID' },
+                    { name: 'Update by ID', value: 'updateById', action: 'Update file metadata by ID' },
+                    { name: 'Delete by ID', value: 'deleteById', action: 'Delete a file by ID' },
+                    { name: 'Download by ID', value: 'downloadById', action: 'Download file content by ID' },
+                    { name: 'Create Folder', value: 'createFolder', action: 'Create a new folder' },
+                    { name: 'Update Content', value: 'updateContent', action: 'Update file content by ID' },
+                ],
+                default: 'getAll',
+            },
+            
+            // ASSET TYPES OPERATIONS
+            {
+                displayName: 'Asset Types Operation',
+                name: 'operation',
+                type: 'options',
+                noDataExpression: true,
+                displayOptions: { show: { resource: ['assetTypes'] } },
+                options: [
+                    { name: 'Create', value: 'create', action: 'Create a new AssetType' },
+                    { name: 'Get by ID', value: 'getById', action: 'Get an AssetType by its internal ID' },
+                    { name: 'Get by Label', value: 'getByLabel', action: 'Get an AssetType by its label' },
+                    { name: 'Update by ID', value: 'updateById', action: 'Update an AssetType by its internal ID' },
+                    { name: 'Update by Label', value: 'updateByLabel', action: 'Update an AssetType by its label' },
+                    { name: 'Delete by ID', value: 'deleteById', action: 'Delete an AssetType by its internal ID' },
+                    { name: 'Delete by Label', value: 'deleteByLabel', action: 'Delete an AssetType by its label' },
+                ],
+                default: 'getById',
+            },
+            
+            // ASSETS OPERATIONS
+            {
+                displayName: 'Assets Operation',
+                name: 'operation',
+                type: 'options',
+                noDataExpression: true,
+                displayOptions: { show: { resource: ['assets'] } },
+                options: [
+                    { name: 'Get All', value: 'getAll', action: 'Get a list of assets' },
+                    { name: 'Create', value: 'create', action: 'Create a new Asset' },
+                    { name: 'Get by ID', value: 'getById', action: 'Get an Asset by its internal ID' },
+                    { name: 'Get by Number', value: 'getByNumber', action: 'Get an Asset by its number' },
+                    { name: 'Update by ID', value: 'updateById', action: 'Update an Asset by its internal ID' },
+                    { name: 'Update by Number', value: 'updateByNumber', action: 'Update an Asset by its number' },
+                    { name: 'Delete by ID', value: 'deleteById', action: 'Delete an Asset by its internal ID' },
+                    { name: 'Delete by Number', value: 'deleteByNumber', action: 'Delete an Asset by its number' },
+                    { name: 'Get Inventories by ID', value: 'getInventoriesById', action: 'Get a list of part inventories by asset' },
+                    { name: 'Get Inventories by Number', value: 'getInventoriesByNumber', action: 'Get a list of part inventories by asset by serial number' },
+                ],
+                default: 'getAll',
+            },
+            
+            // ORGANIZATIONS OPERATIONS
+            {
+                displayName: 'Organizations Operation',
+                name: 'operation',
+                type: 'options',
+                noDataExpression: true,
+                displayOptions: { show: { resource: ['organizations'] } },
+                options: [
+                    { name: 'Get All', value: 'getAll', action: 'Get a list of organizations' },
+                    { name: 'Create', value: 'create', action: 'Create a new organization' },
+                    { name: 'Get by ID', value: 'getById', action: 'Get an organization by its internal ID' },
+                    { name: 'Update by ID', value: 'updateById', action: 'Update an organization by its internal ID' },
+                    { name: 'Delete by ID', value: 'deleteById', action: 'Delete an organization by its internal ID' },
+                    { name: 'Get Contacts by ID', value: 'getContactsById', action: 'Get a list of contacts for a specific organization' },
+                ],
+                default: 'getAll',
+            },
+            
+            // CONTACTS OPERATIONS
+            {
+                displayName: 'Contacts Operation',
+                name: 'operation',
+                type: 'options',
+                noDataExpression: true,
+                displayOptions: { show: { resource: ['contacts'] } },
+                options: [
+                    { name: 'Get All', value: 'getAll', action: 'Get a list of contacts' },
+                    { name: 'Create', value: 'create', action: 'Add a new contact to an organization' },
+                    { name: 'Get by ID', value: 'getById', action: 'Get a contact by its internal ID' },
+                    { name: 'Update by ID', value: 'updateById', action: 'Update a contact by its internal ID' },
+                    { name: 'Delete by ID', value: 'deleteById', action: 'Delete a contact by its internal ID' },
+                ],
+                default: 'getAll',
+            },
+            
+            // PARTS OPERATIONS
+            {
+                displayName: 'Parts Operation',
+                name: 'operation',
+                type: 'options',
+                noDataExpression: true,
+                displayOptions: { show: { resource: ['parts'] } },
+                options: [
+                    { name: 'Get All', value: 'getAll', action: 'Get all parts' },
+                    { name: 'Create', value: 'create', action: 'Create a new part' },
+                    { name: 'Get by ID', value: 'getById', action: 'Get a specific part by ID' },
+                    { name: 'Update by ID', value: 'updateById', action: 'Update a specific part by ID' },
+                    { name: 'Get by Number', value: 'getByNumber', action: 'Get a part by its number' },
+                    { name: 'Update by Number', value: 'updateByNumber', action: 'Update a part by its number' },
+                ],
+                default: 'getAll',
+            },
+            
+            // WORK ORDERS OPERATIONS
+            {
+                displayName: 'Work Orders Operation',
+                name: 'operation',
+                type: 'options',
+                noDataExpression: true,
+                displayOptions: { show: { resource: ['workOrders'] } },
+                options: [
+                    { name: 'Get All', value: 'getAll', action: 'Get a list of work orders' },
+                    { name: 'Create', value: 'create', action: 'Create a new work order' },
+                    { name: 'Get by ID', value: 'getById', action: 'Get a work order by its internal ID' },
+                    { name: 'Update by ID', value: 'updateById', action: 'Update a work order by its internal ID' },
+                    { name: 'Delete by ID', value: 'deleteById', action: 'Delete a work order by its internal ID' },
+                    { name: 'Get by External Reference', value: 'getByExternalReference', action: 'Get a work order by its external reference' },
+                    { name: 'Update by External Reference', value: 'updateByExternalReference', action: 'Update a work order by its external reference' },
+                    { name: 'Delete by External Reference', value: 'deleteByExternalReference', action: 'Delete a work order by its external reference' },
+                    { name: 'Get Time Entries', value: 'getTimeEntries', action: 'Get time entries for a work order' },
+                ],
+                default: 'getAll',
+            },
+            
+            // FORMS OPERATIONS
+            {
+                displayName: 'Forms Operation',
+                name: 'operation',
+                type: 'options',
+                noDataExpression: true,
+                displayOptions: { show: { resource: ['forms'] } },
+                options: [
+                    { name: 'Get All', value: 'getAll', action: 'Get a list of forms' },
+                    { name: 'Get by ID', value: 'getById', action: 'Get a form by its ID' },
+                ],
+                default: 'getAll',
+            },
+            
+            // AI CHAT OPERATIONS
+            {
+                displayName: 'AI Chat Operation',
+                name: 'operation',
+                type: 'options',
+                noDataExpression: true,
+                displayOptions: { show: { resource: ['aiChat'] } },
+                options: [
+                    { name: 'Answer Question', value: 'answerQuestion', action: 'Answer a question using AI' },
+                    { name: 'Provide Feedback', value: 'provideFeedback', action: 'Provide feedback for an AI response' },
+                ],
+                default: 'answerQuestion',
+            },
+            
+            // TICKETS OPERATIONS
+            {
+                displayName: 'Ticket Operation',
+                name: 'operation',
+                type: 'options',
+                noDataExpression: true,
+                displayOptions: { show: { resource: ['tickets'] } },
+                options: [
+                    { name: 'Get All', value: 'getAll', action: 'Get a list of Tickets' },
+                    { name: 'Get Categories', value: 'getCategories', action: 'Get the available ticket categories' },
+                    { name: 'Create', value: 'create', action: 'Create a new Ticket' },
+                    { name: 'Get Conversations by ID', value: 'getConversations', action: 'Get a Ticket\'s conversations by its ID' },
+                    { name: 'Get by ID', value: 'getById', action: 'Get a Ticket by its internal ID' },
+                    { name: 'Update by ID', value: 'updateById', action: 'Update a Ticket by its internal ID' },
+                    { name: 'Delete by ID', value: 'deleteById', action: 'Delete a Ticket by its internal ID' },
+                ],
+                default: 'getAll',
+            },
+            
+            // PLACEHOLDER OPERATION (for resources not yet implemented)
+            
+
+             // #####################################################################
+                // #                                                                   #
+                // #               UI PRE SELECTOR                                     #
+                // #                                                                   #
+                // #                                                                   #
+                // #                                                                   #
+                // #                                                                   #
+                // #                                                                   #
+                // #####################################################################
+
+
+
+
+            // ASSET TYPES PARAMETERS
+            {
+                displayName: 'AssetType ID',
+                name: 'assetTypeId',
+                type: 'string',
+                displayOptions: { show: { resource: ['assetTypes'], operation: ['getById', 'updateById', 'deleteById'] } },
+                default: '',
+                description: `The asset type\'s internal ID (e.g. 68cc051cd53eb9fe4d75a947)
+                The Asset Type has the following base parameters [
+                {
+                    "id": "68cc051cd53eb9fe4d75a947",
+                    "createdAt": "2025-09-18T13:11:56.479Z",
+                    "updatedAt": "2025-09-18T13:11:56.479Z",
+                    "label": "mylabelname"
+                }
+                ]
+                
+                `,
+               
+            },
+            {
+                displayName: 'AssetType Label',
+                name: 'assetTypeLabel',
+                type: 'string',
+                displayOptions: { show: { resource: ['assetTypes'], operation: ['getByLabel', 'updateByLabel', 'deleteByLabel'] } },
+                default: '',
+                description: 'The asset type\'s label (will be URL encoded automatically)',
+                //required: true,
+            },
+            {
+                displayName: 'New Label',
+                name: 'assetTypeNewLabel',
+                type: 'string',
+                displayOptions: { show: { resource: ['assetTypes'], operation: ['create', 'updateById', 'updateByLabel'] } },
+                default: '',
+                description: 'The asset type\'s label (string)',
+                //required: true,
+            },
+
+            // ASSETS PARAMETERS
+            {
+                displayName: 'Asset ID',
+                name: 'assetId',
+                type: 'string',
+                displayOptions: { show: { resource: ['assets'], operation: ['getById', 'updateById', 'deleteById', 'getInventoriesById'] } },
+                default: '',
+                description: 'The asset\'s internal ID',
+                //required: true,
+            },
+            {
+                displayName: 'Asset Number',
+                name: 'assetNumber',
+                type: 'string',
+                displayOptions: { show: { resource: ['assets'], operation: ['getByNumber', 'updateByNumber', 'deleteByNumber', 'getInventoriesByNumber'] } },
+                default: '',
+                description: 'The asset\'s number (will be URL encoded automatically)',
+                //required: true,
+            },
+            {
+                displayName: 'Additional Options',
+                name: 'assetsAdditionalOptions',
+                type: 'collection',
+                displayOptions: { show: { resource: ['assets'], operation: ['getAll'] } },
+                default: {},
+                placeholder: 'Add Option',
+                options: [
+                    { displayName: 'Page', name: 'page', type: 'number', default: 1 , description: '(Number) Return Page Number'},
+                    { displayName: 'Limit', name: 'limit', type: 'number', default: 20, 
+                    description: `(Number) Define how many items will be received in the payload per request.(default 20 items, max 1000 items)`
+                    },
+                    { displayName: 'Organization Number', name: 'organizationNumber', type: 'string', default: '' , description: '(String) Filter by specifying a related organization number.'},
+                    { displayName: 'Parent Asset Number', name: 'parentAssetNumber', type: 'string', default: '', description: '(String) Filter by specifying the related parent asset number (only direct children are fetched).' },
+                    { displayName: 'Asset Type Label', name: 'assetTypeLabel', type: 'string', default: '', description: '(String) Filter by specifying the asset type label.' },
+                    { displayName: 'Sort Direction', name: 'sortDirection', type: 'options', options: [{ name: 'Ascending', value: 'asc' }, { name: 'Descending', value: 'desc' }], default: 'asc' , description: '(String) Sort direction (allowed: asc, desc).'},
+                    { displayName: 'Sort Field', name: 'sortField', type: 'options', options: [{ name: 'Asset Number', value: 'assetNumber' }, { name: 'Created At', value: 'createdAt' }, { name: 'Updated At', value: 'updatedAt' }], default: 'assetNumber', description: '(String) Sort field (default: assetNumber) (allowed: assetNumber, createdAt, updatedAt)' },
+                ],
+            },
+            {
+                displayName: 'Additional Options',
+                name: 'assetsInventoryAdditionalOptions',
+                type: 'collection',
+                displayOptions: { show: { resource: ['assets'], operation: ['getInventoriesById', 'getInventoriesByNumber'] } },
+                default: {},
+                placeholder: 'Add Option',
+                options: [
+                    { displayName: 'Page', name: 'page', type: 'number', default: 1 },
+                    { displayName: 'Limit', name: 'limit', type: 'number', default: 20 },
+                ],
+            },
+            {
+                displayName: 'Associations',
+                name: 'assetsAssociations',
+                type: 'multiOptions',
+                displayOptions: { show: { resource: ['assets'], operation: ['getById', 'getByNumber'] } },
+                default: [],
+                options: [
+                    { name: 'Organizations', value: 'relatedOrganizations' },         
+                    { name: 'Contacts', value: 'relatedContacts' },                   
+                    { name: 'User Groups', value: 'userGroups' },                     
+                    { name: 'Parent Asset', value: 'parentAsset' },                    
+                    { name: 'Child Assets', value: 'childAssets' },                    
+                    { name: 'Assigned Person', value: 'assignedPerson' },              
+                    { name: 'Custom Properties', value: 'customProperties' },          
+                ],
+            },
+            {
+                displayName: 'Asset Data',
+                name: 'assetData',
+                type: 'collection',
+                displayOptions: { show: { resource: ['assets'], operation: ['create', 'updateById', 'updateByNumber'] } },
+                default: {},
+                placeholder: 'Add Field',
+                //required: true,
+                options: [
+                    { displayName: 'Asset Number', name: 'assetNumber', type: 'string', default: '', description: 'The assets number' },
+                    { displayName: 'Asset Type ID', name: 'assetTypeId', type: 'string', default: '', description: 'The asset type internal ID that this asset belongs to (Provide either this or the assetTypeLabel)' },
+                    { displayName: 'Asset Type Label', name: 'assetTypeLabel', type: 'string', default: '' , description: 'The asset type label that this asset belongs to (Provide either this or the assetTypeId)'},
+                    { displayName: 'Name', name: 'name', type: 'string', default: '', description: 'The assets display name (if not specified the assetTypeLabel is used as display name)' },
+                    { displayName: 'Parent Asset ID', name: 'parentAssetId', type: 'string', default: '' , description: 'The internal ID of this assets parent (Provide either this or the parentAssetNumber)'},
+                    { displayName: 'Parent Asset Number', name: 'parentAssetNumber', type: 'string', default: '' , description: 'The asset number of this assets parent (Provide either this or the parentAssetId)'},
+                    { displayName: 'Assigned Person ID', name: 'assignedPersonId', type: 'string', default: '' , description: 'The internal IDs of the organizations that will be related to the asset (Provide either this or the relatedOrganizationNumbers).' },
+                ],
+            },
+
+            // ORGANIZATIONS PARAMETERS
+            {
+                displayName: 'Organization ID',
+                name: 'organizationId',
+                type: 'string',
+                displayOptions: { show: { resource: ['organizations'], operation: ['getById', 'updateById', 'deleteById', 'getContactsById'] } },
+                default: '',
+                description: 'The organization\'s internal ID',
+                //required: true,
+            },
+            {
+                displayName: 'Additional Options',
+                name: 'organizationsAdditionalOptions',
+                type: 'collection',
+                displayOptions: { show: { resource: ['organizations'], operation: ['getAll'] } },
+                default: {},
+                placeholder: 'Add Option',
+                options: [
+                    { displayName: 'Page', name: 'page', type: 'number', default: 1 },
+                    { displayName: 'Limit', name: 'limit', type: 'number', default: 20 },
+                    { displayName: 'Search', name: 'search', type: 'string', default: '' , description: 'Allows to filter by the search phrase over name, organizationNumber, website, phoneNumber properties.'},
+                    { displayName: 'Sort Direction', name: 'sortDirection', type: 'options', options: [{ name: 'Ascending', value: 'asc' }, { name: 'Descending', value: 'desc' }], default: 'asc' },
+                    { displayName: 'Sort Field', name: 'sortField', type: 'options', description: 'Specify the field used for sorting.', options: [{ name: 'Name', value: 'name' }, { name: 'Website URL', value: 'websiteUrl' }, { name: 'Updated At', value: 'updatedAt' }, { name: 'Created At', value: 'createdAt' }, { name: 'Tenant', value: 'tenant' }, { name: 'External Reference', value: 'externalReference' }], default: 'name' },
+                ],
+            },
+            {
+                displayName: 'Additional Options',
+                name: 'organizationsContactsAdditionalOptions',
+                type: 'collection',
+                displayOptions: { show: { resource: ['organizations'], operation: ['getContactsById'] } },
+                default: {},
+                placeholder: 'Add Option',
+                options: [
+                    { displayName: 'Page', name: 'page', type: 'number', default: 1 },
+                    { displayName: 'Limit', name: 'limit', type: 'number', default: 20 },
+                    { displayName: 'Search', name: 'search', type: 'string', default: '' , description: 'Allows to filter by the search phrase over fullName, email properties.'},
+                    { displayName: 'Sort Direction', name: 'sortDirection', type: 'options', options: [{ name: 'Ascending', value: 'asc' }, { name: 'Descending', value: 'desc' }], default: 'asc' },
+                    { displayName: 'Sort Field', name: 'sortField', type: 'options', options: [{ name: 'Updated At', value: 'updatedAt' }, { name: 'Created At', value: 'createdAt' }, { name: 'First Name', value: 'firstName' }, { name: 'Last Name', value: 'lastName' }, { name: 'Full Name', value: 'fullName' }, { name: 'Status', value: 'status' }], default: 'fullName' },
+                ],
+            },
+            {
+                displayName: 'Organization Data',
+                name: 'organizationData',
+                type: 'collection',
+                displayOptions: { show: { resource: ['organizations'], operation: ['create', 'updateById'] } },
+                default: {},
+                placeholder: 'Add Field',
+                //required: true,
+                options: [
+                    { displayName: 'Name', name: 'name', type: 'string', default: ''},
+                    { displayName: 'Organization Number', name: 'organizationNumber', type: 'string', default: '' },
+                    { displayName: 'Email', name: 'email', type: 'string', default: '' },
+                    { displayName: 'Website', name: 'website', type: 'string', default: '' },
+                    { displayName: 'Language', name: 'lang', type: 'options', options: [{ name: 'English (US)', value: 'en-US' }, { name: 'German', value: 'de-DE' }, { name: 'Turkish', value: 'tr-TR' }, { name: 'French', value: 'fr-FR' }, { name: 'Spanish', value: 'es-ES' }, { name: 'Italian', value: 'it-IT' }, { name: 'Greek', value: 'el-GR' }, { name: 'Thai', value: 'th-TH' }, { name: 'Polish', value: 'pl-PL' }, { name: 'Czech', value: 'cs-CZ' }, { name: 'Hungarian', value: 'hu-HU' }, { name: 'Romanian', value: 'ro-RO' }, { name: 'Portuguese', value: 'pt-PT' }], default: 'en-US' },
+                    { displayName: 'Timezone', name: 'tz', type: 'string', default: 'Europe/Berlin' },
+                    { displayName: 'Phone Number', name: 'phoneNumber', type: 'collection', default: {}, options: [{ displayName: 'Number', name: 'number', type: 'string', default: '' }, { displayName: 'Country Prefix', name: 'countryPrefix', type: 'string', default: '' }] },
+                    { displayName: 'Shipping Address', name: 'shippingAddress', type: 'collection', default: {}, options: [{ displayName: 'Company', name: 'company', type: 'string', default: '' }, { displayName: 'Street', name: 'street', type: 'string', default: '' }, { displayName: 'Street Number', name: 'streetNumber', type: 'string', default: '' }, { displayName: 'ZIP/Postal Code', name: 'zipPostCode', type: 'string', default: '' }, { displayName: 'City', name: 'city', type: 'string', default: '' }, { displayName: 'Country/Province', name: 'countryProvince', type: 'string', default: '' }, { displayName: 'Country', name: 'country', type: 'string', default: '' }, { displayName: 'Other', name: 'other', type: 'string', default: '' }, { displayName: 'Person', name: 'person', type: 'string', default: '' }] },
+                ],
+            },
+
+            // CONTACTS PARAMETERS
+            {
+                displayName: 'Contact ID',
+                name: 'contactId',
+                type: 'string',
+                displayOptions: { show: { resource: ['contacts'], operation: ['getById', 'updateById', 'deleteById'] } },
+                default: '',
+                description: 'The contact\'s internal ID',
+                //required: true,
+            },
+            {
+                displayName: 'Additional Options',
+                name: 'contactsAdditionalOptions',
+                type: 'collection',
+                displayOptions: { show: { resource: ['contacts'], operation: ['getAll'] } },
+                default: {},
+                placeholder: 'Add Option',
+                options: [
+                    { displayName: 'Page', name: 'page', type: 'number', default: 1 },
+                    { displayName: 'Limit', name: 'limit', type: 'number', default: 20 },
+                    { displayName: 'Organization Number', name: 'organizationNumber', type: 'string', default: '' },
+                    { displayName: 'Search', name: 'search', type: 'string', default: '' },
+                    { displayName: 'Sort Direction', name: 'sortDirection', type: 'options', options: [{ name: 'Ascending', value: 'asc' }, { name: 'Descending', value: 'desc' }], default: 'asc' },
+                    { displayName: 'Sort Field', name: 'sortField', type: 'options', options: [{ name: 'Updated At', value: 'updatedAt' }, { name: 'Created At', value: 'createdAt' }, { name: 'First Name', value: 'firstName' }, { name: 'Last Name', value: 'lastName' }, { name: 'Full Name', value: 'fullName' }, { name: 'Status', value: 'status' }], default: 'fullName' },
+                ],
+            },
+            {
+                displayName: 'Contact Data',
+                name: 'contactData',
+                type: 'collection',
+                displayOptions: { show: { resource: ['contacts'], operation: ['create', 'updateById'] } },
+                default: {},
+                placeholder: 'Add Field',
+                //required: true,
+                options: [
+                    { displayName: 'First Name', name: 'firstName', type: 'string', default: ''},
+                    { displayName: 'Last Name', name: 'lastName', type: 'string', default: '' },
+                    { displayName: 'Organization Number', name: 'organizationNumber', type: 'string', default: '' },
+                    { displayName: 'Remberg User Email', name: 'rembergUserEmail', type: 'string', default: ''},
+                    { displayName: 'Job Position', name: 'jobPosition', type: 'string', default: '' },
+                    { displayName: 'Phone Number', name: 'phoneNumber', type: 'collection', default: {}, options: [{ displayName: 'Number', name: 'number', type: 'string', default: '' }, { displayName: 'Country Prefix', name: 'countryPrefix', type: 'string', default: '' }] },
+                ],
+            },
+
+            // PARTS PARAMETERS
+            {
+                displayName: 'Part ID',
+                name: 'partId',
+                type: 'string',
+                displayOptions: { show: { resource: ['parts'], operation: ['getById', 'updateById'] } },
+                default: '',
+                description: 'The part\'s internal ID',
+                //required: true,
+            },
+            {
+                displayName: 'Part Number',
+                name: 'partNumber',
+                type: 'string',
+                displayOptions: { show: { resource: ['parts'], operation: ['getByNumber', 'updateByNumber'] } },
+                default: '',
+                description: 'The part\'s number (will be URL encoded automatically)',
+                //required: true,
+            },
+            {
+                displayName: 'Additional Options',
+                name: 'partsAdditionalOptions',
+                type: 'collection',
+                displayOptions: { show: { resource: ['parts'], operation: ['getAll'] } },
+                default: {},
+                placeholder: 'Add Option',
+                options: [
+                    { displayName: 'Page', name: 'page', type: 'number', default: 1 },
+                    { displayName: 'Limit', name: 'limit', type: 'number', default: 20 },
+                    { displayName: 'Search', name: 'search', type: 'string', default: '' },
+                    { displayName: 'Sort Direction', name: 'sortDirection', type: 'options', options: [{ name: 'Ascending', value: 'asc' }, { name: 'Descending', value: 'desc' }], default: 'asc' },
+                    { displayName: 'Sort Field', name: 'sortField', type: 'options', options: [{ name: 'Name', value: 'name' }, { name: 'Part Number', value: 'partNumber' }, { name: 'Updated At', value: 'updatedAt' }, { name: 'Created At', value: 'createdAt' }], default: 'name' },
+                    { displayName: 'Created At From', name: 'createdAtFrom', type: 'dateTime', default: '' },
+                    { displayName: 'Created At Until', name: 'createdAtUntil', type: 'dateTime', default: '' },
+                    { displayName: 'Updated At From', name: 'updatedAtFrom', type: 'dateTime', default: '' },
+                    { displayName: 'Updated At Until', name: 'updatedAtUntil', type: 'dateTime', default: '' },
+                ],
+            },
+            {
+                displayName: 'Associations',
+                name: 'partsAssociations',
+                type: 'multiOptions',
+                displayOptions: { show: { resource: ['parts'], operation: ['getById', 'getByNumber'] } },
+                default: [],
+                options: [
+                    { name: 'Manufacturer Organization', value: 'manufacturerOrganization' },
+                    { name: 'Distributor Organizations', value: 'distributorOrganizations' },
+                    { name: 'Custom Properties', value: 'customProperties' },
+                ],
+            },
+            {
+                displayName: 'Part Data',
+                name: 'partData',
+                type: 'collection',
+                displayOptions: { show: { resource: ['parts'], operation: ['create', 'updateById', 'updateByNumber'] } },
+                default: {},
+                placeholder: 'Add Field',
+                //required: true,
+                options: [
+                    { displayName: 'Name', name: 'name', type: 'string', default: ''},
+                    { displayName: 'Part Number', name: 'partNumber', type: 'string', default: '' },
+                    { displayName: 'Description', name: 'description', type: 'string', default: '' },
+                    { displayName: 'External Reference', name: 'externalReference', type: 'string', default: '' },
+                    { displayName: 'Price', name: 'price', type: 'number', default: 0 },
+                    { displayName: 'Minimum Stock', name: 'minimumStock', type: 'number', default: 0 },
+                    { displayName: 'Manufacturer Organization ID', name: 'manufacturerOrganizationId', type: 'string', default: '' },
+                    { displayName: 'Manufacturer Organization Number', name: 'manufacturerOrganizationNumber', type: 'string', default: '' },
+                    { displayName: 'Distributor Organization IDs', name: 'distributorOrganizationIds', type: 'string', default: '' },
+                    { displayName: 'Distributor Organization Numbers', name: 'distributorOrganizationNumbers', type: 'string', default: '' },
+                    { displayName: 'Custom Properties', name: 'customPropertyValues', type: 'fixedCollection', default: {}, typeOptions: { multipleValues: true }, options: [ { name: 'property', displayName: 'Custom Property', values: [ { displayName: 'Reference', name: 'reference', type: 'string', default: ''}, { displayName: 'Value', name: 'value', type: 'string', default: '' } ] } ] },
+                ],
+            },
+
+
+            // File PARAMETERS
+            
+            {
+                displayName: 'File ID',
+                name: 'fileId',
+                type: 'string',
+                displayOptions: { show: { resource: ['files'], operation: ['getById', 'updateById', 'deleteById', 'downloadById', 'updateContent'] } },
+                default: '',
+                description: 'The file\'s internal ID',
+            },
+            {
+                displayName: 'Additional Options',
+                name: 'filesAdditionalOptions',
+                type: 'collection',
+                displayOptions: { show: { resource: ['files'], operation: ['getAll'] } },
+                default: {},
+                placeholder: 'Add Option',
+                options: [
+                    { displayName: 'Folder ID', name: 'folderId', type: 'string', default: '', description: 'Set the internal folderId to receive items within a folder' },
+                    { displayName: 'Is Folder', name: 'isFolder', type: 'boolean', default: false, description: 'Specifies whether the output contains both files and folders, or only folders (if set to true)' },
+                    { displayName: 'Sort Direction', name: 'sortDirection', type: 'options', options: [{ name: 'Ascending', value: 'asc' }, { name: 'Descending', value: 'desc' }], default: 'asc', description: 'Define the sort order of the received payload' },
+                    { displayName: 'Sort Field', name: 'sortField', type: 'options', options: [{ name: 'Name', value: 'name' }, { name: 'Size', value: 'size' }, { name: 'Updated At', value: 'updatedAt' }, { name: 'Created At', value: 'createdAt' }], default: 'name', description: 'Specify the field used for sorting' },
+                    { displayName: 'Page', name: 'page', type: 'number', default: 1, description: 'Page number for pagination' },
+                    { displayName: 'Limit', name: 'limit', type: 'number', default: 20, description: 'Define how many items will be received in the payload per request (default 20 items)' },
+                    { displayName: 'Search', name: 'search', type: 'string', default: '', description: 'Allows to filter by the search phrase over name property' },
+                ],
+            },
+            {
+                displayName: 'File Data',
+                name: 'fileData',
+                type: 'collection',
+                displayOptions: { show: { resource: ['files'], operation: ['upload', 'updateById', 'createFolder'] } },
+                default: {},
+                placeholder: 'Add Field',
+                options: [
+                    { displayName: 'Name', name: 'name', type: 'string', default: '', description: 'Define the name of the file or folder' },
+                    { displayName: 'Description', name: 'description', type: 'string', default: '', description: 'Optional description for the file or folder' },
+                    { displayName: 'Is Public', name: 'isPublic', type: 'boolean', default: false, description: 'If set to true, the uploaded files will be visible in the portal. Defaults to false' },
+                    { displayName: 'Parent ID', name: 'parentId', type: 'string', default: '', description: 'Set the internal parentId to nest a file inside a folder' },
+                    { displayName: 'Asset Types', name: 'assetTypes', type: 'string', default: '', description: 'Comma-separated list of assetTypes to assign a file to them' },
+                    { displayName: 'Asset Numbers', name: 'assetNumbers', type: 'string', default: '', description: 'Comma-separated list of assetNumbers to assign a file to them' },
+                    { displayName: 'Add to Knowledge Base', name: 'isAddedToKnowledgeBase', type: 'boolean', default: false, description: 'Specify if the file should be added to the knowledge base for the AI Copilot' },
+                ],
+            },
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            // WORK ORDERS PARAMETERS
+            {
+                displayName: 'Work Order ID',
+                name: 'workOrderId',
+                type: 'string',
+                displayOptions: { show: { resource: ['workOrders'], operation: ['getById', 'updateById', 'deleteById', 'getTimeEntries'] } },
+                default: '',
+                description: 'The work order\'s internal ID',
+                //required: true,
+            },
+            {
+                displayName: 'External Reference',
+                name: 'workOrderExternalReference',
+                type: 'string',
+                displayOptions: { show: { resource: ['workOrders'], operation: ['getByExternalReference', 'updateByExternalReference', 'deleteByExternalReference'] } },
+                default: '',
+                description: 'The work order\'s external reference (ERP reference)',
+                //required: true,
+            },
+            {
+                displayName: 'Additional Options',
+                name: 'workOrdersAdditionalOptions',
+                type: 'collection',
+                displayOptions: { show: { resource: ['workOrders'], operation: ['getAll'] } },
+                default: {},
+                placeholder: 'Add Option',
+                options: [
+                    { displayName: 'Page', name: 'page', type: 'number', default: 1 },
+                    { displayName: 'Limit', name: 'limit', type: 'number', default: 20 },
+                    { displayName: 'Related Organization Number', name: 'relatedOrganizationNumber', type: 'string', default: '' },
+                    { displayName: 'Parent Work Order External Reference', name: 'parentWorkOrderExternalReference', type: 'string', default: '' },
+                    { displayName: 'Status Reference', name: 'statusReference', type: 'string', default: '' },
+                    { displayName: 'Type Reference', name: 'typeReference', type: 'string', default: '' },
+                    { displayName: 'Status Completed', name: 'statusCompleted', type: 'boolean', default: false },
+                    { displayName: 'Updated At From', name: 'updatedAtFrom', type: 'dateTime', default: '' },
+                    { displayName: 'Updated At Until', name: 'updatedAtUntil', type: 'dateTime', default: '' },
+                    { displayName: 'Created At From', name: 'createdAtFrom', type: 'dateTime', default: '' },
+                    { displayName: 'Created At Until', name: 'createdAtUntil', type: 'dateTime', default: '' },
+                    { displayName: 'Due Date From', name: 'dueDateFrom', type: 'dateTime', default: '' },
+                    { displayName: 'Due Date Until', name: 'dueDateUntil', type: 'dateTime', default: '' },
+                ],
+            },
+            {
+                displayName: 'Associations',
+                name: 'workOrdersAssociations',
+                type: 'multiOptions',
+                displayOptions: { show: { resource: ['workOrders'], operation: ['getById', 'getByExternalReference'] } },
+                default: [],
+                options: [
+                    { name: 'Related Organization', value: 'relatedOrganization' },
+                    { name: 'Related Assets', value: 'relatedAssets' },
+                    { name: 'Custom Properties', value: 'customProperties' },
+                ],
+            },
+            {
+                displayName: 'Work Order Data',
+                name: 'workOrderData',
+                type: 'collection',
+                displayOptions: { show: { resource: ['workOrders'], operation: ['create', 'updateById', 'updateByExternalReference'] } },
+                default: {},
+                placeholder: 'Add Field',
+                //required: true,
+                options: [
+                    { displayName: 'Subject', name: 'subject', type: 'string', default: '' },
+                    { displayName: 'Description', name: 'description', type: 'string', default: '' },
+                    { displayName: 'Status Reference', name: 'statusReference', type: 'string', default: '' },
+                    { displayName: 'Type Reference', name: 'typeReference', type: 'string', default: '' },
+                    { displayName: 'Priority', name: 'priority', type: 'options', options: [{ name: 'Low', value: '000_low' }, { name: 'Normal', value: '010_normal' }, { name: 'High', value: '020_high' }, { name: 'Critical', value: '030_critical' }], default: '010_normal' },
+                    { displayName: 'Due Date', name: 'dueDate', type: 'dateTime', default: '' },
+                    { displayName: 'External Reference', name: 'externalReference', type: 'string', default: '' },
+                    { displayName: 'Parent Work Order External Reference', name: 'parentWorkOrderExternalReference', type: 'string', default: '' },
+                    { displayName: 'Parent Work Order ID', name: 'parentWorkOrderId', type: 'string', default: '' },
+                    { displayName: 'Related Organization ID', name: 'relatedOrganizationId', type: 'string', default: '' },
+                    { displayName: 'Related Asset IDs', name: 'relatedAssetIds', type: 'string', default: '' },
+                    { displayName: 'Custom Properties', name: 'customPropertyValues', type: 'fixedCollection', default: {}, typeOptions: { multipleValues: true }, options: [ { name: 'property', displayName: 'Custom Property', values: [ { displayName: 'Reference', name: 'reference', type: 'string', default: '' }, { displayName: 'Value', name: 'value', type: 'string', default: ''} ] } ] },
+                ],
+            },
+
+            // FORMS PARAMETERS
+            {
+                displayName: 'Form ID',
+                name: 'formId',
+                type: 'string',
+                displayOptions: { show: { resource: ['forms'], operation: ['getById'] } },
+                default: '',
+                description: 'The form\'s ID',
+                //required: true,
+            },
+            {
+                displayName: 'Additional Options',
+                name: 'formsAdditionalOptions',
+                type: 'collection',
+                displayOptions: { show: { resource: ['forms'], operation: ['getAll'] } },
+                default: {},
+                placeholder: 'Add Option',
+                options: [
+                    { displayName: 'Status', name: 'status', type: 'options', options: [{ name: 'In Progress', value: 'inProgress' }, { name: 'Finalized', value: 'finalized' }], default: 'inProgress' },
+                    { displayName: 'Page', name: 'page', type: 'number', default: 0 },
+                    { displayName: 'Limit', name: 'limit', type: 'number', default: 20 },
+                    { displayName: 'Form Template ID', name: 'formTemplateId', type: 'string', default: '' },
+                    { displayName: 'Finalized At From', name: 'finalizedAtFrom', type: 'dateTime', default: '' },
+                    { displayName: 'Finalized At Until', name: 'finalizedAtUntil', type: 'dateTime', default: '' },
+                    { displayName: 'Sort Field', name: 'sortField', type: 'options', options: [{ name: 'Counter', value: 'counter' }, { name: 'Name', value: 'name' }, { name: 'Date Modified', value: 'dateModified' }, { name: 'Finalized At', value: 'finalizedAt' }, { name: 'Created At', value: 'createdAt' }], default: 'createdAt' },
+                    { displayName: 'Sort Direction', name: 'sortDirection', type: 'options', options: [{ name: 'Ascending', value: 'asc' }, { name: 'Descending', value: 'desc' }], default: 'desc' },
+                ],
+            },
+
+            // AI CHAT PARAMETERS
+            {
+                displayName: 'Question',
+                name: 'aiChatQuestion',
+                type: 'string',
+                displayOptions: { show: { resource: ['aiChat'], operation: ['answerQuestion'] } },
+                default: '',
+                //required: true,
+                description: 'Question that should be answered by the request',
+            },
+            {
+                displayName: 'Context',
+                name: 'aiChatContext',
+                type: 'fixedCollection',
+                displayOptions: { show: { resource: ['aiChat'], operation: ['answerQuestion'] } },
+                default: {},
+                placeholder: 'Add Context Item',
+                typeOptions: { multipleValues: true },
+                options: [ { name: 'items', displayName: 'Items', values: [ { displayName: 'Instance ID', name: 'instanceId', type: 'string', default: ''}, { displayName: 'Type', name: 'type', type: 'options',options: [{ name: 'Asset', value: 'asset' }, { name: 'File', value: 'file' }, { name: 'Asset Type', value: 'assetType' }], default: 'asset' } ] } ],
+            },
+            {
+                displayName: 'Trace ID',
+                name: 'aiChatTraceId',
+                type: 'string',
+                displayOptions: { show: { resource: ['aiChat'], operation: ['provideFeedback'] } },
+                default: '',
+                //required: true,
+            },
+            {
+                displayName: 'Score',
+                name: 'aiChatScore',
+                type: 'number',
+                displayOptions: { show: { resource: ['aiChat'], operation: ['provideFeedback'] } },
+                default: 10,
+                //required: true,
+                typeOptions: { minValue: 0, maxValue: 10 },
+            },
+            {
+                displayName: 'Comment',
+                name: 'aiChatComment',
+                type: 'string',
+                displayOptions: { show: { resource: ['aiChat'], operation: ['provideFeedback'] } },
+                default: '',
+            },
+
+            // TICKETS PARAMETERS
+            {
+                displayName: 'Ticket ID',
+                name: 'ticketId',
+                type: 'string',
+                displayOptions: {
+                    show: {
+                        resource: ['tickets'],
+                        operation: ['getById', 'updateById', 'deleteById', 'getConversations'],
+                    },
+                },
+                default: '',
+                //Frequired: true,
+                description: 'The internal ID of the Ticket',
+            },
+            {
+                displayName: 'Additional Options',
+                name: 'ticketsAdditionalOptions',
+                type: 'collection',
+                displayOptions: {
+                    show: {
+                        resource: ['tickets'],
+                        operation: ['getAll'],
+                    },
+                },
+                default: {},
+                placeholder: 'Add Option',
+                options: [
+                    { displayName: 'Page', name: 'page', type: 'number', default: 1 },
+                    { displayName: 'Limit', name: 'limit', type: 'number', default: 20 },
+                    { displayName: 'Search', name: 'search', type: 'string', default: '' },
+                    {
+                        displayName: 'Status',
+                        name: 'status',
+                        type: 'options',
+                        options: [
+                            { name: 'New', value: 'new' },
+                            { name: 'Open', value: 'open' },
+                            { name: 'Pending Internal', value: 'pendingInternal' },
+                            { name: 'Pending External', value: 'pendingExternal' },
+                            { name: 'Solved', value: 'solved' },
+                            { name: 'Closed', value: 'closed' },
+                            { name: 'Moved', value: 'moved' },
+                        ],
+                        default: 'open',
+                    },
+                    {
+                        displayName: 'Priority',
+                        name: 'priority',
+                        type: 'options',
+                        options: [
+                            { name: 'Low', value: '000_low' },
+                            { name: 'Normal', value: '010_normal' },
+                            { name: 'High', value: '020_high' },
+                            { name: 'Critical', value: '030_critical' },
+                        ],
+                        default: '010_normal',
+                    },
+                    { displayName: 'Category ID', name: 'categoryId', type: 'string', default: '' },
+                    { displayName: 'Related Organization ID', name: 'relatedOrganizationId', type: 'string', default: '' },
+                    { displayName: 'Related Asset ID', name: 'relatedAssetId', type: 'string', default: '' },
+                    { displayName: 'Related Asset Type ID', name: 'relatedAssetTypeId', type: 'string', default: '' },
+                    { displayName: 'Assigned Person ID', name: 'assignedPersonId', type: 'string', default: '' },
+                    { displayName: 'Updated At From', name: 'updatedAtFrom', type: 'dateTime', default: '' },
+                    { displayName: 'Updated At Until', name: 'updatedAtUntil', type: 'dateTime', default: '' },
+                    { displayName: 'Created At From', name: 'createdAtFrom', type: 'dateTime', default: '' },
+                    { displayName: 'Created At Until', name: 'createdAtUntil', type: 'dateTime', default: '' },
+                ],
+            },
+            {
+                displayName: 'Associations',
+                name: 'ticketsAssociations',
+                type: 'string',
+                displayOptions: {
+                    show: {
+                        resource: ['tickets'],
+                        operation: ['getById'],
+                    },
+                },
+                default: '',
+                description: 'Comma-separated list of associations to include',
+            },
+            {
+                displayName: 'Ticket Data',
+                name: 'ticketData',
+                type: 'collection',
+                displayOptions: {
+                    show: {
+                        resource: ['tickets'],
+                        operation: ['create', 'updateById'],
+                    },
+                },
+                default: {},
+                placeholder: 'Add Field',
+                //required: true,
+                options: [
+                    { displayName: 'Subject', name: 'subject', type: 'string', default: '' },
+                    { displayName: 'Note', name: 'note', type: 'string', default: '' },
+                    {
+                        displayName: 'Status',
+                        name: 'status',
+                        type: 'options',
+                        options: [
+                            { name: 'New', value: 'new' },
+                            { name: 'Open', value: 'open' },
+                            { name: 'Pending Internal', value: 'pendingInternal' },
+                            { name: 'Pending External', value: 'pendingExternal' },
+                            { name: 'Solved', value: 'solved' },
+                            { name: 'Closed', value: 'closed' },
+                            { name: 'Moved', value: 'moved' },
+                        ],
+                        default: 'open',
+                    },
+                    {
+                        displayName: 'Priority',
+                        name: 'priority',
+                        type: 'options',
+                        options: [
+                            { name: 'Low', value: '000_low' },
+                            { name: 'Normal', value: '010_normal' },
+                            { name: 'High', value: '020_high' },
+                            { name: 'Critical', value: '030_critical' },
+                        ],
+                        default: '000_low',
+                    },
+                    { displayName: 'Solution', name: 'solution', type: 'string', default: '' },
+                    { displayName: 'Summary', name: 'summary', type: 'string', default: '' },
+                    { displayName: 'Assigned Person ID', name: 'assignedPerson', type: 'string', default: '' },
+                    { displayName: 'Related Organization IDs', name: 'relatedOrganizationIds', type: 'string', default: '', description: 'Comma-separated list of IDs' },
+                    { displayName: 'Related Contact IDs', name: 'relatedContactIds', type: 'string', default: '', description: 'Comma-separated list of IDs' },
+                    { displayName: 'Related Asset IDs', name: 'relatedAssetIds', type: 'string', default: '', description: 'Comma-separated list of IDs' },
+                    {
+                        displayName: 'Related Parts',
+                        name: 'relatedParts',
+                        type: 'fixedCollection',
+                        typeOptions: { multipleValues: true },
+                        default: {},
+                        placeholder: 'Add Part',
+                        options: [
+                            {
+                                name: 'part',
+                                displayName: 'Part',
+                                values: [
+                                    { displayName: 'Part ID', name: 'partId', type: 'string', default: ''},
+                                    { displayName: 'Quantity', name: 'quantity', type: 'number', default: 1 },
+                                ],
+                            },
+                        ],
+                    },
+                ],
+            },
+        ],
+    } as any;
+
+    async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
+        const items = this.getInputData();
+        const returnData: INodeExecutionData[] = [];
+
+        for (let i = 0; i < items.length; i++) {
+            const resource = this.getNodeParameter('resource', i) as string;
+
+            let endpoint = '';
+            let method: IHttpRequestMethods = 'GET';
+            let body: any = {};
+
+            try {
+                if (resource === 'assetTypes') {
+                    const result = await executeAssetTypes.call(this, i);
+                    endpoint = result.endpoint;
+                    method = result.method;
+                    body = result.body;
+                } else if (resource === 'assets') {
+                    const result = await executeAssets.call(this, i);
+                    endpoint = result.endpoint;
+                    method = result.method;
+                    body = result.body;
+                } else if (resource === 'organizations') {
+                    const result = await executeOrganizations.call(this, i);
+                    endpoint = result.endpoint;
+                    method = result.method;
+                    body = result.body;
+                }  else if (resource === 'contacts') {
+                    const result = await executeContacts.call(this, i);
+                    endpoint = result.endpoint;
+                    method = result.method;
+                    body = result.body;
+                } else if (resource === 'parts') {
+                    const result = await executeParts.call(this, i);
+                    endpoint = result.endpoint;
+                    method = result.method;
+                    body = result.body;
+                } else if (resource === 'files') {
+                    const result = await executeFiles.call(this, i);
+                    endpoint = result.endpoint;
+                    method = result.method;
+                    body = result.body;
+                    
+                    const operation = this.getNodeParameter('operation', i) as string;
+                    
+                    // Special handling for file download (binary data)
+                    if (operation === 'downloadById') {
+                        const responseData = await this.helpers.requestWithAuthentication.call(
+                            this,
+                            'rembergApi',
+                            {
+                                method,
+                                url: `https://api.remberg.de${endpoint}`,
+                                json: false, // Important: Don't parse as JSON
+                                encoding: null, // Get raw buffer
+                            },
+                        );
+                        
+                        const fileName = `download_${Date.now()}`;
+                        const binaryData = await this.helpers.prepareBinaryData(responseData as Buffer, fileName);
+                        
+                        returnData.push({
+                            json: { success: true, fileName },
+                            binary: { data: binaryData },
+                            pairedItem: { item: i }
+                        });
+                        continue;
+                    }
+                    
+                    // Special handling for multipart/form-data (upload, updateContent)
+                    if (result.encoding === 'multipart/form-data') {
+                        const responseData = await this.helpers.requestWithAuthentication.call(
+                            this,
+                            'rembergApi',
+                            {
+                                method,
+                                url: `https://api.remberg.de${endpoint}`,
+                                body,
+                                // Remove manual headers - let n8n handle it
+                                json: false,
+                            },
+                        );
+                        
+                        // Try to parse response
+                        let parsedResponse;
+                        try {
+                            parsedResponse = typeof responseData === 'string' ? JSON.parse(responseData) : responseData;
+                        } catch {
+                            parsedResponse = { response: responseData.toString() };
+                        }
+                        
+                        returnData.push({ json: parsedResponse, pairedItem: { item: i } });
+                        continue;
+                    }
+                }  else if (resource === 'workOrders') {
+                    const result = await executeWorkOrders.call(this, i);
+                    endpoint = result.endpoint;
+                    method = result.method;
+                    body = result.body;
+                } else if (resource === 'forms') {
+                    const result = await executeForms.call(this, i);
+                    endpoint = result.endpoint;
+                    method = result.method;
+                    body = result.body;
+                } else if (resource === 'aiChat') {
+                    const result = await executeAiChat.call(this, i);
+                    endpoint = result.endpoint;
+                    method = result.method;
+                    body = result.body;
+                }  else if (resource === 'tickets') {
+                    const result = await executeTickets.call(this, i);
+                    endpoint = result.endpoint;
+                    method = result.method;
+                    body = result.body;
+                }
+
+                // #####################################################################
+                // #                                                                   #
+                // #    GIGANTISCHER PLATZHALTER FÜR DIE NÄCHSTE RESSOURCE             #
+                // #                                                                   #
+                // #    1. Erstelle die neue Logik-Datei in `/operations`              #
+                // #    2. Importiere die Funktion oben in dieser Datei                #
+                // #    3. Füge hier den `else if`-Block hinzu, genau wie oben         #
+                // #                                                                   #
+                // #####################################################################
+                
+                else {
+                     returnData.push({
+                        json: { error: `Resource "${resource}" is not yet implemented.` },
+                        pairedItem: { item: i },
+                    });
+                    continue;
+                } 
+                
+                const responseData = await this.helpers.requestWithAuthentication.call(
+                    this,
+                    'rembergApi',
+                    {
+                        method,
+                        url: `https://api.remberg.de${endpoint}`,
+                        body: Object.keys(body).length > 0 ? body : undefined,
+                        json: true,
+                    },
+                );
+
+                returnData.push({
+                    json: responseData,
+                    pairedItem: { item: i },
+                });
+
+            } catch (error) {
+                if (this.continueOnFail()) {
+                    returnData.push({
+                        json: { error: error.message },
+                        pairedItem: { item: i },
+                    });
+                } else {
+                    throw error;
+                }
+            }
+        }
+
+        return this.prepareOutputData(returnData);
+    }
+}

@@ -92,6 +92,23 @@ jobs:
             git commit -m "Restore custom workflows from original state"
           fi
           # ------------------------
+
+          # --- INJECT CUSTOM NODES ---
+          echo "Injecting custom nodes into package.json..."
+          
+          # Make script executable just in case
+          chmod +x .github/scripts/inject-custom-nodes.sh
+          
+          # Run the injection script
+          bash .github/scripts/inject-custom-nodes.sh
+          
+          # Commit the injection
+          git add packages/nodes-base/package.json
+          if ! git diff --cached --quiet; then
+             git commit -m "Inject Custom Nodes into package.json"
+          fi
+          # ---------------------------
+          
           
           git remote set-url origin https://${{ secrets.GH_PAT }}@github.com/${{ github.repository }}.git
           

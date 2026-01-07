@@ -7,5 +7,24 @@ initial-credentials/** merge=ours
 updates/** merge=ours
 docker-compose.yml merge=ours
 requirements.txt merge=ours
+
+#Add Readme files
 README.md merge=ours
 TODO.md merge=ours
+Install-Custom-Nodes.md merge=ours
+Custom-Node-Development-Guide.md merge=ours
+
+
+
+# custom script for adding custom nodes since we want to insert it into the node-base and credentials folder
+.github/scripts/inject-custom-nodes.sh merge=ours
+
+
+# Remberg Custom Node
+packages/nodes-base/nodes/Remberg/** merge=ours
+packages/nodes-base/credentials/RembergApi.credentials.ts merge=ours
+
+
+# WhatsApp Private Custom Node
+packages/nodes-base/nodes/WhatsappPrivate/** merge=ours
+packages/nodes-base/credentials/WhatsappPrivateApi.credentials.ts merge=ours
