@@ -84,7 +84,7 @@ Python packages install during container startup (not build time) for improved r
 
 1. **Container starts** with n8n running immediately
 2. **Workflows import** within 30 seconds
-3. **Python packages install** in background (5 minutes initial setup)
+3. **Python packages install** in background (about 5 minutes initial setup)
 4. **Status monitoring** tracks installation progress
 
 ### Monitoring Python Installation
@@ -96,7 +96,7 @@ docker-compose exec n8n-advanced cat /home/node/.n8n/python-status
 # Possible values: installing, ready, failed, updating
 ```
 
-### Adding New Packages
+### Adding New Python Packages
 
 **Method 1 - Runtime Installation (Temporary):**
 ```bash
@@ -153,6 +153,7 @@ For production deployment with custom domain and SSL:
 
 - **Google Cloud**: [GCP n8n Guide](https://github.com/StardawnAI/n8n-advanced/tree/main/googlecloud-n8n-selfhost)
 - **Oracle Cloud**: [Oracle n8n Guide](https://github.com/StardawnAI/n8n-advanced/tree/main/oraclecloud-n8n-selfhost)
+- - **Localhost (with Cloudflare)**: [Localhost](https://github.com/JPresting/2---Self-Hosted-Infrastructure/tree/main/local-n8n-selfhost)
 
 Replace the Docker commands in those guides with this repo URL.
 
