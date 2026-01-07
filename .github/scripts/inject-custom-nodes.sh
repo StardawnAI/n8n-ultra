@@ -5,17 +5,31 @@ cd packages/nodes-base || exit 1
 
 echo "Injecting custom nodes into package.json..."
 
-# Helper function to inject if missing
+PKG_FILE="package.json"
+
+# Helper function to inject entry before closing bracket of an array
+# This properly adds a comma to the previous line and inserts the new entry
 inject_if_missing() {
-    SEARCH=$1
-    INSERT=$2
-    TYPE=$3 # nodes or credentials
-    if ! grep -q "$SEARCH" package.json; then
-        echo "Injecting $SEARCH..."
-        sed -i "/\"$TYPE\": \[/,/\]/ s|]|    \"$INSERT\",\n  ]|" package.json
-    else
+    local SEARCH="$1"
+    local INSERT="$2"
+    local SECTION="$3"  # "credentials" or "nodes"
+    
+    if grep -q "$SEARCH" "$PKG_FILE"; then
         echo "$SEARCH already present."
+        return
     fi
+    
+    echo "Injecting $SEARCH..."
+    
+    # Use node.js for reliable JSON manipulation
+    node -e "
+        const fs = require('fs');
+        const pkg = JSON.parse(fs.readFileSync('$PKG_FILE', 'utf8'));
+        if (!pkg.n8n['$SECTION'].includes('$INSERT')) {
+            pkg.n8n['$SECTION'].push('$INSERT');
+        }
+        fs.writeFileSync('$PKG_FILE', JSON.stringify(pkg, null, 2));
+    "
 }
 
 # Define paths for injection
