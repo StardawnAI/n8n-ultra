@@ -40,13 +40,15 @@ jobs:
             exit 1
           fi
 
-          # --- CHECK IF RELEASE ALREADY EXISTS ---
-          echo "Checking if release $LATEST_RELEASE already exists in this repo..."
-          if gh release view "$LATEST_RELEASE" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
-            echo "Release $LATEST_RELEASE already exists. Nothing to do. Exiting."
+          # --- CHECK IF REBUILD NEEDED (either from n8n-advanced or from n8nio)---
+          RELEASE_COMMIT=$(git rev-list -n 1 "$LATEST_RELEASE" 2>/dev/null || echo "none")
+          CURRENT_COMMIT=$(git rev-parse HEAD)
+          
+          if [ "$RELEASE_COMMIT" = "$CURRENT_COMMIT" ]; then
+            echo "Release $LATEST_RELEASE already points to current code. Nothing to do."
             exit 0
           fi
-          # ---------------------------------------
+          # ------------------------------
           
           echo "Syncing with release: $LATEST_RELEASE"
           
@@ -145,7 +147,6 @@ jobs:
           for i in {1..5}; do
             (
               # Subshell to retry the entire block
-              # Note: Removed "gh release delete" because we only run this if it doesn't exist.
               gh release create "$LATEST_RELEASE" \
                 --repo "$GITHUB_REPOSITORY" \
                 --title "n8n-advanced Release $LATEST_RELEASE" \
