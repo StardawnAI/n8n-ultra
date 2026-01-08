@@ -24,6 +24,7 @@ jobs:
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
           
       - name: Sync with latest RELEASE (not master)
+        id: sync
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -76,7 +77,8 @@ jobs:
             echo "Current HEAD: $CURRENT_HEAD"
             
             if [ "$RELEASE_COMMIT" = "$CURRENT_HEAD" ]; then
-              echo "=== NOTHING IS NEW. Exiting without changes. ==="
+              echo "=== NOTHING IS NEW. Skipping all remaining steps. ==="
+              echo "skip_release=true" >> $GITHUB_OUTPUT
               exit 0
             else
               echo "We pushed new code since last release. Rebuilding..."
@@ -164,6 +166,7 @@ jobs:
           done
           
       - name: Create our Release
+        if: steps.sync.outputs.skip_release != 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}
         run: |
