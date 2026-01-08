@@ -41,27 +41,29 @@ jobs:
           fi
 
           # --- CHECK IF REBUILD NEEDED ---
-          # We only rebuild if:
-          # 1. n8n released a new version we don't have yet OR
-          # 2. We committed new code since our last release
+          # Rule 1: If n8n's latest release tag is different from ours → Rebuild
+          # Rule 2: If same version but we pushed new code → Rebuild
+          # Rule 3: If nothing is new → EXIT 0 (do nothing)
           
-          # Check if we already have a release with this tag name
-          OUR_RELEASE=$(gh release view "$LATEST_RELEASE" --repo "$GITHUB_REPOSITORY" --json tagName --jq '.tagName' 2>/dev/null || echo "")
+          # STEP 1: Get OUR current release tag name (not commit, just the tag name)
+          OUR_LATEST_TAG=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 1 --json tagName --jq '.[0].tagName' 2>/dev/null || echo "")
           
-          if [ -z "$OUR_RELEASE" ]; then
-            echo "New n8n release detected: $LATEST_RELEASE. Proceeding with sync..."
+          echo "n8n's latest release: $LATEST_RELEASE"
+          echo "Our latest release: $OUR_LATEST_TAG"
+          
+          # STEP 2: Compare tag names
+          if [ "$LATEST_RELEASE" != "$OUR_LATEST_TAG" ]; then
+            echo "n8n has a new release ($LATEST_RELEASE). Proceeding with sync..."
           else
-            # We have the release - check if current HEAD matches the release
-            # Get commit from tag (dereference to actual commit for annotated tags)
-            TAG_INFO=$(gh api repos/$GITHUB_REPOSITORY/git/refs/tags/$LATEST_RELEASE 2>/dev/null || echo "")
+            # Same version - check if we pushed new code
+            # Get the commit our release tag points to
+            TAG_INFO=$(gh api repos/$GITHUB_REPOSITORY/git/refs/tags/$OUR_LATEST_TAG 2>/dev/null || echo "")
             if [ -n "$TAG_INFO" ]; then
               TAG_TYPE=$(echo "$TAG_INFO" | jq -r '.object.type')
               if [ "$TAG_TYPE" = "tag" ]; then
-                # Annotated tag - need to dereference
                 TAG_SHA=$(echo "$TAG_INFO" | jq -r '.object.sha')
                 RELEASE_COMMIT=$(gh api repos/$GITHUB_REPOSITORY/git/tags/$TAG_SHA --jq '.object.sha' 2>/dev/null || echo "none")
               else
-                # Lightweight tag - direct commit
                 RELEASE_COMMIT=$(echo "$TAG_INFO" | jq -r '.object.sha')
               fi
             else
@@ -70,14 +72,14 @@ jobs:
             
             CURRENT_HEAD=$(git rev-parse HEAD)
             
-            echo "Release commit: $RELEASE_COMMIT"
+            echo "Our release commit: $RELEASE_COMMIT"
             echo "Current HEAD: $CURRENT_HEAD"
             
             if [ "$RELEASE_COMMIT" = "$CURRENT_HEAD" ]; then
-              echo "Release $LATEST_RELEASE exists and matches current code. Nothing to do."
+              echo "=== NOTHING IS NEW. Exiting without changes. ==="
               exit 0
             else
-              echo "Code changed since last release. Rebuilding..."
+              echo "We pushed new code since last release. Rebuilding..."
             fi
           fi
           # ------------------------------
