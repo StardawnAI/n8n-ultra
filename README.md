@@ -5,14 +5,20 @@ Enhanced n8n with persistent Python packages, PostgreSQL database, and intellige
 ## Quick Start
 
 ```bash
-# Option 1: Docker Hub
+# Latest version (recommended)
 docker pull stardawn/n8n-advanced:latest
 docker run -d -p 5678:5678 stardawn/n8n-advanced:latest
 
-# Option 2: GitHub Container Registry
+# Specific version (e.g., n8n 2.2.4 with stardawn 1.0)
+docker pull stardawn/n8n-advanced:2.2.4-stardawn-1.0
+
+# Alternative: GitHub Container Registry
 docker pull ghcr.io/stardawnai/n8n-advanced:latest
-docker run -d -p 5678:5678 ghcr.io/stardawnai/n8n-advanced:latest
 ```
+
+**Available Tags:**
+- `:latest` - Always the newest version
+- `:X.X.X-stardawn-X.X` - Specific n8n + stardawn version (e.g., `2.2.4-stardawn-1.0`)
 
 Access at: http://localhost:5678
 

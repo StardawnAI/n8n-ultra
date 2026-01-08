@@ -40,13 +40,27 @@ jobs:
             exit 1
           fi
 
-          # --- CHECK IF REBUILD NEEDED (either from n8n-advanced or from n8nio)---
-          RELEASE_COMMIT=$(git rev-list -n 1 "$LATEST_RELEASE" 2>/dev/null || echo "none")
-          CURRENT_COMMIT=$(git rev-parse HEAD)
+          # --- CHECK IF REBUILD NEEDED ---
+          # Case 1: n8n released a new version we don't have yet
+          # Case 2: We have the release but user pushed new code
           
-          if [ "$RELEASE_COMMIT" = "$CURRENT_COMMIT" ]; then
-            echo "Release $LATEST_RELEASE already points to current code. Nothing to do."
-            exit 0
+          # Check if we already have a release with this tag name
+          OUR_RELEASE=$(gh release view "$LATEST_RELEASE" --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName 2>/dev/null || echo "")
+          
+          if [ -z "$OUR_RELEASE" ]; then
+            echo "New n8n release detected: $LATEST_RELEASE. Proceeding with sync..."
+          else
+            # We have the release - check if user pushed new code
+            # Get the commit our release tag points to
+            OUR_TAG_COMMIT=$(git for-each-ref --format='%(objectname)' "refs/tags/$LATEST_RELEASE" 2>/dev/null || echo "none")
+            CURRENT_HEAD=$(git rev-parse HEAD)
+            
+            if [ "$OUR_TAG_COMMIT" = "$CURRENT_HEAD" ]; then
+              echo "Release $LATEST_RELEASE exists and matches current code. Nothing to do."
+              exit 0
+            else
+              echo "User pushed new code since last release. Rebuilding..."
+            fi
           fi
           # ------------------------------
           
@@ -143,6 +157,29 @@ jobs:
           git tag -f "$LATEST_RELEASE"
           git push origin "$LATEST_RELEASE" -f
 
+          # Get latest commit info for release title/notes
+          COMMIT_TITLE=$(git log -1 --pretty=%s)
+          COMMIT_BODY=$(git log -1 --pretty=%b)
+          
+          # Read stardawn version
+          STARDAWN_VERSION=$(cat STARDAWN_VERSION 2>/dev/null || echo "1.0")
+          
+          # Build release title with both versions
+          RELEASE_TITLE="n8n-advanced Release $LATEST_RELEASE stardawn@$STARDAWN_VERSION"
+          
+          # Build release notes with markdown
+          RELEASE_NOTES="## n8n-advanced Release $LATEST_RELEASE stardawn@$STARDAWN_VERSION
+
+**n8n Base Version:** $LATEST_RELEASE  
+**Stardawn Version:** $STARDAWN_VERSION
+
+---
+
+### Latest Changes
+$COMMIT_TITLE
+
+$COMMIT_BODY"
+
           # --- RETRY LOOP 4: Create Release ---
           echo "Creating Release on GitHub (5 attempts)..."
           for i in {1..5}; do
@@ -150,8 +187,8 @@ jobs:
               # Subshell to retry the entire block
               gh release create "$LATEST_RELEASE" \
                 --repo "$GITHUB_REPOSITORY" \
-                --title "n8n-advanced Release $LATEST_RELEASE" \
-                --notes "RELEASE OF $LATEST_RELEASE with custom enhancements" \
+                --title "$RELEASE_TITLE" \
+                --notes "$RELEASE_NOTES" \
                 --latest
             ) && break
             

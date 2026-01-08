@@ -63,6 +63,16 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Get versions
+        id: versions
+        run: |
+          STARDAWN_VERSION=$(cat STARDAWN_VERSION 2>/dev/null || echo "1.0")
+          N8N_VERSION=$(gh release view --repo n8n-io/n8n --json tagName --jq .tagName | sed 's/n8n@//')
+          echo "stardawn=$STARDAWN_VERSION" >> $GITHUB_OUTPUT
+          echo "n8n=$N8N_VERSION" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -71,8 +81,8 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
             ${{ secrets.DOCKERHUB_USERNAME }}/n8n-advanced
           tags: |
-            type=ref,event=tag
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest
+            type=raw,value=${{ steps.versions.outputs.n8n }}-stardawn-${{ steps.versions.outputs.stardawn }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
