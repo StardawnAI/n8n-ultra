@@ -41,25 +41,43 @@ jobs:
           fi
 
           # --- CHECK IF REBUILD NEEDED ---
-          # Case 1: n8n released a new version we don't have yet
-          # Case 2: We have the release but user pushed new code
+          # We only rebuild if:
+          # 1. n8n released a new version we don't have yet OR
+          # 2. We committed new code since our last release
           
           # Check if we already have a release with this tag name
-          OUR_RELEASE=$(gh release view "$LATEST_RELEASE" --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName 2>/dev/null || echo "")
+          OUR_RELEASE=$(gh release view "$LATEST_RELEASE" --repo "$GITHUB_REPOSITORY" --json tagName --jq '.tagName' 2>/dev/null || echo "")
           
           if [ -z "$OUR_RELEASE" ]; then
             echo "New n8n release detected: $LATEST_RELEASE. Proceeding with sync..."
           else
-            # We have the release - check if user pushed new code
-            # Get the commit our release tag points to
-            OUR_TAG_COMMIT=$(git for-each-ref --format='%(objectname)' "refs/tags/$LATEST_RELEASE" 2>/dev/null || echo "none")
+            # We have the release - check if current HEAD matches the release
+            # Get commit from tag (dereference to actual commit for annotated tags)
+            TAG_INFO=$(gh api repos/$GITHUB_REPOSITORY/git/refs/tags/$LATEST_RELEASE 2>/dev/null || echo "")
+            if [ -n "$TAG_INFO" ]; then
+              TAG_TYPE=$(echo "$TAG_INFO" | jq -r '.object.type')
+              if [ "$TAG_TYPE" = "tag" ]; then
+                # Annotated tag - need to dereference
+                TAG_SHA=$(echo "$TAG_INFO" | jq -r '.object.sha')
+                RELEASE_COMMIT=$(gh api repos/$GITHUB_REPOSITORY/git/tags/$TAG_SHA --jq '.object.sha' 2>/dev/null || echo "none")
+              else
+                # Lightweight tag - direct commit
+                RELEASE_COMMIT=$(echo "$TAG_INFO" | jq -r '.object.sha')
+              fi
+            else
+              RELEASE_COMMIT="none"
+            fi
+            
             CURRENT_HEAD=$(git rev-parse HEAD)
             
-            if [ "$OUR_TAG_COMMIT" = "$CURRENT_HEAD" ]; then
+            echo "Release commit: $RELEASE_COMMIT"
+            echo "Current HEAD: $CURRENT_HEAD"
+            
+            if [ "$RELEASE_COMMIT" = "$CURRENT_HEAD" ]; then
               echo "Release $LATEST_RELEASE exists and matches current code. Nothing to do."
               exit 0
             else
-              echo "User pushed new code since last release. Rebuilding..."
+              echo "Code changed since last release. Rebuilding..."
             fi
           fi
           # ------------------------------

@@ -1,0 +1,11 @@
+# Custom Nodes Configuration
+# Each line contains a path to sync from n8n-advanced to n8n-advanced-ns
+# Adding new custom nodes here
+
+# Remberg Node
+packages/nodes-base/nodes/Remberg/
+packages/nodes-base/credentials/RembergApi.credentials.ts
+
+# WhatsApp Private Node  
+packages/nodes-base/nodes/WhatsappPrivate/
+packages/nodes-base/credentials/WhatsappPrivateApi.credentials.ts

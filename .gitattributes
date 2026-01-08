@@ -8,6 +8,7 @@ updates/** merge=ours
 docker-compose.yml merge=ours
 requirements.txt merge=ours
 STARDAWN_VERSION merge=ours
+CUSTOM_NODES.txt merge=ours
 
 #Add Readme files
 README.md merge=ours
