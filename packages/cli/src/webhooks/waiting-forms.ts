@@ -98,9 +98,7 @@ export class WaitingForms extends WaitingWebhooks {
 				}
 			}
 
-			if (req.headers.origin) {
-				res.header('Access-Control-Allow-Origin', req.headers.origin);
-			}
+			applyCors(req, res);
 
 			res.send(status);
 			return { noWebhookResponse: true };
