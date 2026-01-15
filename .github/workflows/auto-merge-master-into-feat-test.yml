@@ -1,0 +1,31 @@
+name: Keep feat-test updated from master
+
+on:
+  schedule:
+    - cron: "10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  merge-master-into-feat-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feat-test
+        uses: actions/checkout@v4
+        with:
+          ref: feat-test
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Merge master -> feat-test (keep feat-test on conflicts)
+        run: |
+          git fetch origin master feat-test
+          git checkout feat-test
+          git merge origin/master --no-edit -X ours
+          git push origin feat-test
