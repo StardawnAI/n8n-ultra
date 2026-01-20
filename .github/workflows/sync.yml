@@ -154,6 +154,29 @@ jobs:
              git commit -m "Inject Custom Nodes into package.json"
           fi
           # ---------------------------
+
+          
+          
+          
+          
+          # --- REGENERATE LOCKFILE ---
+          echo "Regenerating pnpm-lock.yaml after upstream merge..."
+          
+          # Enable corepack (uses pnpm version from package.json)
+          corepack enable
+          corepack prepare pnpm@latest-10 --activate
+          
+          # Regenerate lockfile (this updates it to match all package.json files)
+          pnpm install --no-frozen-lockfile
+          
+          # Commit updated lockfile
+          git add pnpm-lock.yaml
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: regenerate pnpm-lock.yaml after upstream sync"
+          fi
+          # ---------------------------
+
+
           
           
           git remote set-url origin https://${{ secrets.GH_PAT }}@github.com/${{ github.repository }}.git
