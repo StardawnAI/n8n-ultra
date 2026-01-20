@@ -52,7 +52,7 @@ const isNewTemplatesSetupEnabled = computed(() => {
 
 const unsubscribe = watch(allCredentialsFilled, (newValue) => {
 	if (newValue) {
-		workflowsStore.addToWorkflowMetadata({
+		workflowState.addToWorkflowMetadata({
 			templateCredsSetupCompleted: true,
 		});
 

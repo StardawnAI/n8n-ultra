@@ -1050,7 +1050,7 @@ describe('useCanvasOperations', () => {
 			const { addNodes } = useCanvasOperations();
 			await addNodes(nodes, { keepPristine: false });
 
-			expect(uiStore.stateIsDirty).toEqual(true);
+			expect(uiStore.markStateDirty).toHaveBeenCalled();
 		});
 
 		it('should not mark UI state as dirty if keepPristine is true', async () => {
@@ -1069,7 +1069,7 @@ describe('useCanvasOperations', () => {
 			const { addNodes } = useCanvasOperations();
 			await addNodes(nodes, { keepPristine: true });
 
-			expect(uiStore.stateIsDirty).toEqual(false);
+			expect(uiStore.markStateDirty).not.toHaveBeenCalled();
 		});
 
 		it('should pass actionName to telemetry when adding nodes with actions', async () => {
@@ -1782,7 +1782,7 @@ describe('useCanvasOperations', () => {
 			const { addConnections } = useCanvasOperations();
 			await addConnections(connections, { keepPristine: false });
 
-			expect(uiStore.stateIsDirty).toBe(true);
+			expect(uiStore.markStateDirty).toHaveBeenCalled();
 		});
 
 		it('should not set UI state as dirty if keepPristine is true', async () => {
@@ -1792,7 +1792,7 @@ describe('useCanvasOperations', () => {
 			const { addConnections } = useCanvasOperations();
 			await addConnections(connections, { keepPristine: true });
 
-			expect(uiStore.stateIsDirty).toBe(false);
+			expect(uiStore.markStateDirty).not.toHaveBeenCalled();
 		});
 	});
 
@@ -1808,7 +1808,7 @@ describe('useCanvasOperations', () => {
 			createConnection(connection);
 
 			expect(workflowsStore.addConnection).not.toHaveBeenCalled();
-			expect(uiStore.stateIsDirty).toBe(false);
+			expect(uiStore.markStateDirty).not.toHaveBeenCalled();
 		});
 
 		it('should not create a connection if target node does not exist', () => {
@@ -1824,7 +1824,7 @@ describe('useCanvasOperations', () => {
 			createConnection(connection);
 
 			expect(workflowsStore.addConnection).not.toHaveBeenCalled();
-			expect(uiStore.stateIsDirty).toBe(false);
+			expect(uiStore.markStateDirty).not.toHaveBeenCalled();
 		});
 
 		it('should create a connection if source and target nodes exist and connection is allowed', () => {
@@ -1882,7 +1882,7 @@ describe('useCanvasOperations', () => {
 					{ index: 0, node: nodeB.name, type: NodeConnectionTypes.Main },
 				],
 			});
-			expect(uiStore.stateIsDirty).toBe(true);
+			expect(uiStore.markStateDirty).toHaveBeenCalled();
 		});
 
 		it('should not set UI state as dirty if keepPristine is true', () => {
@@ -1934,7 +1934,7 @@ describe('useCanvasOperations', () => {
 
 			createConnection(connection, { keepPristine: true });
 
-			expect(uiStore.stateIsDirty).toBe(false);
+			expect(uiStore.markStateDirty).not.toHaveBeenCalled();
 		});
 	});
 
@@ -3521,7 +3521,7 @@ describe('useCanvasOperations', () => {
 			expect(setActiveExecutionId).toHaveBeenCalledWith(undefined);
 			expect(workflowsStore.lastSuccessfulExecution).toBeNull();
 			expect(uiStore.resetLastInteractedWith).toHaveBeenCalled();
-			expect(uiStore.stateIsDirty).toBe(false);
+			expect(uiStore.markStateClean).toHaveBeenCalled();
 			expect(executionsStore.activeExecution).toBeNull();
 			expect(credentialsSpy).toHaveBeenCalledWith(false);
 			expect(credentialsUpdatedRef.value).toBe(false);
@@ -3662,7 +3662,7 @@ describe('useCanvasOperations', () => {
 			const result = await openExecution(executionId);
 
 			expect(setWorkflowExecutionData).toHaveBeenCalledWith(executionData);
-			expect(uiStore.stateIsDirty).toBe(false);
+			expect(uiStore.markStateClean).toHaveBeenCalled();
 			expect(result).toEqual(executionData);
 		});
 
@@ -3679,6 +3679,7 @@ describe('useCanvasOperations', () => {
 		});
 
 		it('should clear workflow pin data if execution mode is not manual', async () => {
+			const setWorkflowPinDataSpy = vi.spyOn(workflowState, 'setWorkflowPinData');
 			const workflowsStore = mockedStore(useWorkflowsStore);
 			const { openExecution } = useCanvasOperations();
 
@@ -3697,7 +3698,7 @@ describe('useCanvasOperations', () => {
 
 			await openExecution(executionId);
 
-			expect(workflowsStore.setWorkflowPinData).toHaveBeenCalledWith({});
+			expect(setWorkflowPinDataSpy).toHaveBeenCalledWith({});
 		});
 		it('should show an error notification for failed executions', async () => {
 			const workflowsStore = mockedStore(useWorkflowsStore);
@@ -4415,6 +4416,8 @@ describe('useCanvasOperations', () => {
 				'getNewWorkflowDataAndMakeShareable',
 			);
 
+			const addToWorkflowMetadataSpy = vi.spyOn(workflowState, 'addToWorkflowMetadata');
+
 			const { importTemplate } = useCanvasOperations();
 
 			const templateId = 'template-id';
@@ -4442,7 +4445,7 @@ describe('useCanvasOperations', () => {
 				templateName,
 				projectsStore.currentProjectId,
 			);
-			expect(workflowsStore.addToWorkflowMetadata).toHaveBeenCalledWith({
+			expect(addToWorkflowMetadataSpy).toHaveBeenCalledWith({
 				templateId,
 			});
 		});

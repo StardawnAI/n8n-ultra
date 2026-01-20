@@ -1358,6 +1358,8 @@ export interface INodeParameterResourceLocator {
 	__regex?: string;
 }
 
+export type IconOrEmoji = { type: 'icon'; value: string } | { type: 'emoji'; value: string };
+
 export type NodeParameterValueType =
 	// TODO: Later also has to be possible to add multiple ones with the name name. So array has to be possible
 	| NodeParameterValue
@@ -1366,6 +1368,7 @@ export type NodeParameterValueType =
 	| ResourceMapperValue
 	| FilterValue
 	| AssignmentCollectionValue
+	| IconOrEmoji
 	| NodeParameterValue[]
 	| INodeParameters[]
 	| INodeParameterResourceLocator[]
@@ -1383,6 +1386,7 @@ export type NodePropertyTypes =
 	| 'dateTime'
 	| 'fixedCollection'
 	| 'hidden'
+	| 'icon'
 	| 'json'
 	| 'callout'
 	| 'notice'
@@ -1435,18 +1439,12 @@ export interface CalloutActionBase {
 	icon?: string;
 }
 
-export interface CalloutActionOpenPreBuiltAgentsCollection extends CalloutActionBase {
-	type: 'openPreBuiltAgentsCollection';
-}
-
 export interface CalloutActionOpenSampleWorkflowTemplate extends CalloutActionBase {
 	type: 'openSampleWorkflowTemplate';
 	templateId: string;
 }
 
-export type CalloutAction =
-	| CalloutActionOpenPreBuiltAgentsCollection
-	| CalloutActionOpenSampleWorkflowTemplate;
+export type CalloutAction = CalloutActionOpenSampleWorkflowTemplate;
 
 export interface INodePropertyTypeOptions {
 	// Supported by: button
@@ -1470,6 +1468,9 @@ export interface INodePropertyTypeOptions {
 	multipleValues?: boolean; // Supported by: <All>
 	multipleValueButtonText?: string; // Supported when "multipleValues" set to true
 	numberPrecision?: number; // Supported by: number
+	fixedCollection?: {
+		itemTitle?: string; // Template for item titles, supports {{ $collection.item.value }}, {{ $collection.item.index }}
+	};
 	password?: boolean; // Supported by: string
 	rows?: number; // Supported by: string
 	showAlpha?: boolean; // Supported by: color

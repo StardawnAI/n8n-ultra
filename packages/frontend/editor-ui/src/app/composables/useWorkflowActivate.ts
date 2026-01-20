@@ -4,23 +4,15 @@ import { LOCAL_STORAGE_ACTIVATION_FLAG, WORKFLOW_ACTIVE_MODAL_KEY } from '@/app/
 import { useUIStore } from '@/app/stores/ui.store';
 import { useWorkflowsStore } from '@/app/stores/workflows.store';
 import { useExternalHooks } from '@/app/composables/useExternalHooks';
-import { useRouter } from 'vue-router';
-import { useWorkflowHelpers } from '@/app/composables/useWorkflowHelpers';
 import { useTelemetry } from '@/app/composables/useTelemetry';
 import { useToast } from '@/app/composables/useToast';
 import { useI18n } from '@n8n/i18n';
 import { ref } from 'vue';
-import { useNpsSurveyStore } from '@/app/stores/npsSurvey.store';
-import { useWorkflowSaving } from './useWorkflowSaving';
-import * as workflowsApi from '@/app/api/workflows';
-import { useRootStore } from '@n8n/stores/useRootStore';
+import { useCollaborationStore } from '@/features/collaboration/collaboration/collaboration.store';
 
 export function useWorkflowActivate() {
 	const updatingWorkflowActivation = ref(false);
 
-	const router = useRouter();
-	const workflowHelpers = useWorkflowHelpers();
-	const workflowSaving = useWorkflowSaving({ router });
 	const workflowsStore = useWorkflowsStore();
 	const uiStore = useUIStore();
 	const telemetry = useTelemetry();
@@ -157,6 +149,9 @@ export function useWorkflowActivate() {
 		options?: { name?: string; description?: string },
 	) => {
 		updatingWorkflowActivation.value = true;
+
+		collaborationStore.requestWriteAccess();
+
 		const workflow = workflowsStore.getWorkflowById(workflowId);
 		const hadPublishedVersion = !!workflow.activeVersion;
 
@@ -223,6 +218,8 @@ export function useWorkflowActivate() {
 	const unpublishWorkflowFromHistory = async (workflowId: string) => {
 		updatingWorkflowActivation.value = true;
 
+		collaborationStore.requestWriteAccess();
+
 		const workflow = workflowsStore.getWorkflowById(workflowId);
 		const wasPublished = !!workflow.activeVersion;
 
@@ -262,8 +259,6 @@ export function useWorkflowActivate() {
 	};
 
 	return {
-		activateCurrentWorkflow,
-		updateWorkflowActivation,
 		updatingWorkflowActivation,
 		publishWorkflow,
 		unpublishWorkflowFromHistory,
