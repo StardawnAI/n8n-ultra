@@ -18,130 +18,7 @@ export function useWorkflowActivate() {
 	const telemetry = useTelemetry();
 	const toast = useToast();
 	const i18n = useI18n();
-	const npsSurveyStore = useNpsSurveyStore();
-	const rootStore = useRootStore();
-
-	//methods
-
-	const updateWorkflowActivation = async (
-		workflowId: string | undefined,
-		newActiveState: boolean,
-		telemetrySource?: string,
-	): Promise<boolean> => {
-		// Add return type
-		updatingWorkflowActivation.value = true;
-		const nodesIssuesExist = workflowsStore.nodesIssuesExist;
-
-		let currWorkflowId: string | undefined = workflowId;
-		// Check if workflow needs to be saved (doesn't exist in store yet)
-		const existingWorkflow = currWorkflowId ? workflowsStore.workflowsById[currWorkflowId] : null;
-		if (!currWorkflowId || !existingWorkflow?.id) {
-			const saved = await workflowSaving.saveCurrentWorkflow();
-			if (!saved) {
-				updatingWorkflowActivation.value = false;
-				return false; // Return false if save failed
-			}
-			currWorkflowId = workflowsStore.workflowId;
-		}
-		const isCurrentWorkflow = currWorkflowId === workflowsStore.workflowId;
-
-		const activeWorkflows = workflowsStore.activeWorkflows;
-		const isWorkflowActive = activeWorkflows.includes(currWorkflowId);
-
-		const telemetryPayload = {
-			workflow_id: currWorkflowId,
-			is_active: newActiveState,
-			previous_status: isWorkflowActive,
-			ndv_input: telemetrySource === 'ndv',
-		};
-		telemetry.track('User set workflow active status', telemetryPayload);
-		void useExternalHooks().run('workflowActivate.updateWorkflowActivation', telemetryPayload);
-
-		try {
-			if (isWorkflowActive && newActiveState) {
-				toast.showMessage({
-					title: i18n.baseText('workflowActivator.workflowIsActive'),
-					type: 'success',
-				});
-				updatingWorkflowActivation.value = false;
-
-				return true; // Already active, return true
-			}
-
-			if (isCurrentWorkflow && nodesIssuesExist && newActiveState) {
-				toast.showMessage({
-					title: i18n.baseText(
-						'workflowActivator.showMessage.activeChangedNodesIssuesExistTrue.title',
-					),
-					message: i18n.baseText(
-						'workflowActivator.showMessage.activeChangedNodesIssuesExistTrue.message',
-					),
-					type: 'error',
-				});
-
-				updatingWorkflowActivation.value = false;
-				return false; // Return false if there are node issues
-			}
-
-			// Save workflow if there are unsaved changes
-			if (uiStore.stateIsDirty) {
-				await workflowHelpers.updateWorkflow({ workflowId: currWorkflowId }, false);
-			}
-
-			// Call activate or deactivate endpoint
-			let workflow;
-			if (newActiveState) {
-				workflow = await workflowsApi.activateWorkflow(rootStore.restApiContext, currWorkflowId, {
-					versionId: workflowsStore.workflow.versionId,
-				});
-			} else {
-				workflow = await workflowsApi.deactivateWorkflow(rootStore.restApiContext, currWorkflowId);
-			}
-
-			if (!workflow.checksum) {
-				throw new Error('Failed to activate or deactivate workflow');
-			}
-
-			if (isCurrentWorkflow && workflow.checksum) {
-				workflowsStore.setWorkflowChecksum(workflow.checksum);
-			}
-		} catch (error) {
-			const newStateName = newActiveState ? 'activated' : 'deactivated';
-			toast.showError(
-				error,
-				i18n.baseText('workflowActivator.showError.title', {
-					interpolate: { newStateName },
-				}) + ':',
-			);
-			updatingWorkflowActivation.value = false;
-			return false; // Return false if update failed
-		}
-
-		const activationEventName = isCurrentWorkflow
-			? 'workflow.activeChangeCurrent'
-			: 'workflow.activeChange';
-		void useExternalHooks().run(activationEventName, {
-			workflowId: currWorkflowId,
-			active: newActiveState,
-		});
-
-		updatingWorkflowActivation.value = false;
-
-		if (isCurrentWorkflow) {
-			if (newActiveState && useStorage(LOCAL_STORAGE_ACTIVATION_FLAG).value !== 'true') {
-				uiStore.openModal(WORKFLOW_ACTIVE_MODAL_KEY);
-			} else {
-				await npsSurveyStore.fetchPromptsData();
-			}
-		}
-
-		return newActiveState; // Return the new state after successful update
-	};
-
-	const activateCurrentWorkflow = async (telemetrySource?: string) => {
-		const workflowId = workflowsStore.workflowId;
-		return await updateWorkflowActivation(workflowId, true, telemetrySource);
-	};
+	const collaborationStore = useCollaborationStore();
 
 	const publishWorkflow = async (
 		workflowId: string,
@@ -183,10 +60,7 @@ export function useWorkflowActivate() {
 			workflowsStore.setWorkflowActive(workflowId, updatedWorkflow.activeVersion, true);
 
 			if (workflowId === workflowsStore.workflowId) {
-				workflowsStore.setWorkflowVersionId(updatedWorkflow.versionId);
-				if (updatedWorkflow.checksum) {
-					workflowsStore.setWorkflowChecksum(updatedWorkflow.checksum);
-				}
+				workflowsStore.setWorkflowVersionId(updatedWorkflow.versionId, updatedWorkflow.checksum);
 			}
 
 			void useExternalHooks().run('workflow.published', {
@@ -234,11 +108,7 @@ export function useWorkflowActivate() {
 		void useExternalHooks().run('workflowActivate.updateWorkflowActivation', telemetryPayload);
 
 		try {
-			const updatedWorkflow = await workflowsStore.deactivateWorkflow(workflowId);
-
-			if (workflowId === workflowsStore.workflowId && updatedWorkflow.checksum) {
-				workflowsStore.setWorkflowChecksum(updatedWorkflow.checksum);
-			}
+			await workflowsStore.deactivateWorkflow(workflowId);
 
 			void useExternalHooks().run('workflow.unpublished', {
 				workflowId,

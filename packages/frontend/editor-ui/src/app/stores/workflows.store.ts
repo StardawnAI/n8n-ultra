@@ -771,18 +771,7 @@ export const useWorkflowsStore = defineStore(STORES.WORKFLOWS, () => {
 		}
 	}
 
-	function setWorkflowChecksum(checksum: string) {
-		workflowChecksum.value = checksum;
-	}
-
-	async function updateWorkflowChecksum() {
-		const updatedWorkflow = await fetchWorkflow(workflow.value.id);
-		if (updatedWorkflow.checksum) {
-			setWorkflowChecksum(updatedWorkflow.checksum);
-		}
-	}
-
-	function setWorkflowActiveVersion(version: WorkflowHistory) {
+	function setWorkflowActiveVersion(version: WorkflowHistory | null) {
 		workflow.value.activeVersion = deepCopy(version);
 	}
 
@@ -891,10 +880,6 @@ export const useWorkflowsStore = defineStore(STORES.WORKFLOWS, () => {
 			workflowsById.value[id].versionId = updatedWorkflow.versionId;
 		}
 
-		if (id === workflow.value.id && updatedWorkflow.checksum) {
-			setWorkflowChecksum(updatedWorkflow.checksum);
-		}
-
 		setWorkflowInactive(id);
 
 		if (id === workflow.value.id) {
@@ -916,12 +901,6 @@ export const useWorkflowsStore = defineStore(STORES.WORKFLOWS, () => {
 			workflowsById.value[id].isArchived = false;
 			workflowsById.value[id].versionId = updatedWorkflow.versionId;
 		}
-
-		// Update checksum if unarchiving the currently open workflow
-		if (id === workflow.value.id && updatedWorkflow.checksum) {
-			setWorkflowChecksum(updatedWorkflow.checksum);
-		}
-
 		if (id === workflow.value.id) {
 			setIsArchived(false);
 			setWorkflowVersionId(updatedWorkflow.versionId, updatedWorkflow.checksum);
@@ -1742,10 +1721,6 @@ export const useWorkflowsStore = defineStore(STORES.WORKFLOWS, () => {
 
 		// Update local store state to reflect the change
 		if (isCurrentWorkflow) {
-			setWorkflowVersionId(updated.versionId);
-			if (updated.checksum) {
-				setWorkflowChecksum(updated.checksum);
-			}
 			setWorkflowSettings(updated.settings ?? {});
 		} else if (workflowsById.value[id]) {
 			workflowsById.value[id] = {
@@ -1785,16 +1760,7 @@ export const useWorkflowsStore = defineStore(STORES.WORKFLOWS, () => {
 			expectedChecksum: currentChecksum,
 		});
 
-		// Update local store state
-		if (isCurrentWorkflow) {
-			setDescription(updated.description ?? '');
-			if (updated.versionId !== currentVersionId) {
-				setWorkflowVersionId(updated.versionId);
-			}
-			if (updated.checksum) {
-				setWorkflowChecksum(updated.checksum);
-			}
-		} else if (workflowsById.value[id]) {
+		if (workflowsById.value[id]) {
 			workflowsById.value[id] = {
 				...workflowsById.value[id],
 				description: updated.description,

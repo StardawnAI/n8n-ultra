@@ -845,9 +845,8 @@ export function useWorkflowHelpers() {
 		}
 
 		const workflow = await workflowsStore.updateWorkflow(workflowId, data);
-		workflowsStore.setWorkflowVersionId(workflow.versionId);
-		if (workflow.checksum) {
-			workflowsStore.setWorkflowChecksum(workflow.checksum);
+		if (!workflow.checksum) {
+			throw new Error('Failed to update workflow');
 		}
 
 		if (isCurrentWorkflow) {
@@ -949,13 +948,10 @@ export function useWorkflowHelpers() {
 			setStateDirty: uiStore.stateIsDirty,
 		});
 		ws.setWorkflowSettings(workflowData.settings ?? {});
-		workflowsStore.setWorkflowPinData(workflowData.pinData ?? {});
-		workflowsStore.setWorkflowVersionId(workflowData.versionId);
-		if (workflowData.checksum) {
-			workflowsStore.setWorkflowChecksum(workflowData.checksum);
-		}
-		workflowsStore.setWorkflowMetadata(workflowData.meta);
-		workflowsStore.setWorkflowScopes(workflowData.scopes);
+		ws.setWorkflowPinData(workflowData.pinData ?? {});
+		workflowsStore.setWorkflowVersionId(workflowData.versionId, workflowData.checksum);
+		ws.setWorkflowMetadata(workflowData.meta);
+		ws.setWorkflowScopes(workflowData.scopes);
 
 		if ('activeVersion' in workflowData) {
 			workflowsStore.setWorkflowActiveVersion(workflowData.activeVersion ?? null);

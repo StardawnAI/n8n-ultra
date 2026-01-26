@@ -202,7 +202,7 @@ export async function createWorkflowWithHistory(
 	const workflow = await createWorkflow(attributes, userOrProject);
 
 	// Create workflow history for the initial version
-	await createWorkflowHistory(workflow, userOrProject);
+	await createWorkflowHistory(workflow, userOrProject, withPublishHistory);
 
 	return workflow;
 }
@@ -262,6 +262,8 @@ export async function createWorkflowHistory(
 		nodes: workflow.nodes,
 		connections: workflow.connections,
 		authors,
+		autosaved: false,
+		...overrides,
 	});
 
 	if (withPublishHistory) {

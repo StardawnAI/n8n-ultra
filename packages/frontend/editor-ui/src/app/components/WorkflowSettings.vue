@@ -461,11 +461,7 @@ const saveSettings = async () => {
 	data.expectedChecksum = workflowsStore.workflowChecksum;
 
 	try {
-		const workflowData = await workflowsStore.updateWorkflow(String(route.params.name), data);
-		workflowsStore.setWorkflowVersionId(workflowData.versionId);
-		if (workflowData.checksum) {
-			workflowsStore.setWorkflowChecksum(workflowData.checksum);
-		}
+		await workflowsStore.updateWorkflow(String(route.params.name), data);
 	} catch (error) {
 		toast.showError(error, i18n.baseText('workflowSettings.showError.saveSettings3.title'));
 		isLoading.value = false;

@@ -298,6 +298,83 @@ describe('POST /workflows', () => {
 		expect(historyVersion!.nodes).toEqual(payload.nodes);
 	});
 
+	test('should set autosaved: true in workflow history when autosaved parameter is sent', async () => {
+		const payload = {
+			name: 'testing autosave',
+			nodes: [
+				{
+					id: 'uuid-1234',
+					parameters: {},
+					name: 'Start',
+					type: 'n8n-nodes-base.manualTrigger',
+					typeVersion: 1,
+					position: [240, 300],
+				},
+			],
+			connections: {},
+			staticData: null,
+			settings: {},
+			active: false,
+			activeVersionId: null,
+			autosaved: true,
+		};
+
+		const response = await authOwnerAgent.post('/workflows').send(payload);
+
+		expect(response.statusCode).toBe(200);
+
+		const {
+			data: { id },
+		} = response.body as { data: WorkflowEntity };
+
+		expect(id).toBeDefined();
+		const historyVersion = await workflowHistoryRepository.findOne({
+			where: {
+				workflowId: id,
+			},
+		});
+		expect(historyVersion).not.toBeNull();
+		expect(historyVersion!.autosaved).toBe(true);
+	});
+
+	test('should set autosaved: false in workflow history when autosaved is not sent', async () => {
+		const payload = {
+			name: 'testing manual save',
+			nodes: [
+				{
+					id: 'uuid-1234',
+					parameters: {},
+					name: 'Start',
+					type: 'n8n-nodes-base.manualTrigger',
+					typeVersion: 1,
+					position: [240, 300],
+				},
+			],
+			connections: {},
+			staticData: null,
+			settings: {},
+			active: false,
+			activeVersionId: null,
+		};
+
+		const response = await authOwnerAgent.post('/workflows').send(payload);
+
+		expect(response.statusCode).toBe(200);
+
+		const {
+			data: { id },
+		} = response.body as { data: WorkflowEntity };
+
+		expect(id).toBeDefined();
+		const historyVersion = await workflowHistoryRepository.findOne({
+			where: {
+				workflowId: id,
+			},
+		});
+		expect(historyVersion).not.toBeNull();
+		expect(historyVersion!.autosaved).toBe(false);
+	});
+
 	test('should create workflow as inactive even when active fields are provided', async () => {
 		const activeWorkflow = await createActiveWorkflow({}, owner);
 		const activeVersion = await workflowHistoryRepository.findOne({

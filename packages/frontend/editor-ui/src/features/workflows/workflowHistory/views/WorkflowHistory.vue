@@ -188,8 +188,12 @@ const restoreWorkflowVersion = async (id: WorkflowVersionId) => {
 	const versionIdBeforeRestore = workflow.versionId;
 	activeWorkflow.value = await workflowHistoryStore.restoreWorkflow(workflowId.value, id);
 
-	if (workflowId.value === workflowsStore.workflowId && activeWorkflow.value.checksum) {
-		workflowsStore.setWorkflowChecksum(activeWorkflow.value.checksum);
+	if (activeWorkflow.value.versionId === versionIdBeforeRestore) {
+		toast.showMessage({
+			title: i18n.baseText('workflowHistory.action.restore.alreadyRestored'),
+			type: 'info',
+		});
+		return;
 	}
 
 	const history = await workflowHistoryStore.getWorkflowHistory(workflowId.value, {

@@ -222,7 +222,8 @@ export class OauthService {
 			};
 		}
 
-		if (decryptedState.userId !== req.user?.id) {
+		// if we skip auth on oauth callback, we cannot validate user id
+		if (!skipAuthOnOAuthCallback && decryptedState.userId !== req.user?.id) {
 			throw new AuthError('Unauthorized');
 		}
 

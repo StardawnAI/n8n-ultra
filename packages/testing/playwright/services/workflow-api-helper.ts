@@ -288,14 +288,7 @@ export class WorkflowApiHelper {
 		throw new TestError(`Execution did not complete within ${timeoutMs}ms`);
 	}
 
-	/**
-	 * Wait for a workflow execution to reach a specific status
-	 * @param workflowId - The workflow ID to check
-	 * @param expectedStatus - The expected status (e.g., 'waiting', 'success', 'error')
-	 * @param timeoutMs - Maximum time to wait in milliseconds
-	 * @returns The execution once it reaches the expected status
-	 * @throws TestError if execution doesn't reach the expected status within timeout
-	 */
+	/** Waits for a workflow execution to reach a specific status. */
 	async waitForWorkflowStatus(
 		workflowId: string,
 		expectedStatus: string,

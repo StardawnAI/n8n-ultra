@@ -10,8 +10,7 @@ import { useSourceControlStore } from '@/features/integrations/sourceControl.ee/
 import { useCanvasStore } from '@/app/stores/canvas.store';
 import type { IUpdateInformation, IWorkflowDb } from '@/Interface';
 import type { WorkflowDataCreate, WorkflowDataUpdate } from '@n8n/rest-api-client/api/workflows';
-import type { IDataObject, INode, IWorkflowSettings } from 'n8n-workflow';
-import { useNodeTypesStore } from '@/app/stores/nodeTypes.store';
+import { isExpression, type IDataObject, type IWorkflowSettings } from 'n8n-workflow';
 import { useToast } from './useToast';
 import { useExternalHooks } from './useExternalHooks';
 import { useTelemetry } from './useTelemetry';
@@ -208,10 +207,11 @@ export function useWorkflowSaving({
 				workflowDataRequest,
 				forceSave,
 			);
-			workflowsStore.setWorkflowVersionId(workflowData.versionId);
-			if (workflowData.checksum) {
-				workflowsStore.setWorkflowChecksum(workflowData.checksum);
+			if (!workflowData.checksum) {
+				throw new Error('Failed to update workflow');
 			}
+			workflowsStore.setWorkflowVersionId(workflowData.versionId, workflowData.checksum);
+			workflowState.setWorkflowProperty('updatedAt', workflowData.updatedAt);
 
 			if (name) {
 				workflowState.setWorkflowName({ newName: workflowData.name, setStateDirty: false });

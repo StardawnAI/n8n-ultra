@@ -9,10 +9,12 @@ import { doesNodeHaveAllCredentialsFilled } from '@/app/utils/nodes/nodeTransfor
 
 import { N8nButton } from '@n8n/design-system';
 import { usePostHog } from '@/app/stores/posthog.store';
+import { injectWorkflowState } from '@/app/composables/useWorkflowState';
 import { useReadyToRunStore } from '@/features/workflows/readyToRun/stores/readyToRun.store';
 
 const workflowsStore = useWorkflowsStore();
 const readyToRunStore = useReadyToRunStore();
+const workflowState = injectWorkflowState();
 const nodeTypesStore = useNodeTypesStore();
 const posthogStore = usePostHog();
 const uiStore = useUIStore();
