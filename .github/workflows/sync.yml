@@ -133,7 +133,7 @@ jobs:
         run: |
           rm -f pnpm-lock.yaml
           npm install -g pnpm
-          pnpm install
+          pnpm install --ignore-pnpm-patches
           git add pnpm-lock.yaml
           if ! git diff --cached --quiet; then
             git commit -m "chore: regenerate pnpm-lock.yaml"
