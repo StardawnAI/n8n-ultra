@@ -114,17 +114,26 @@ jobs:
             git commit -m "Inject Custom Nodes"
           fi
 
+      - name: Get Node.js version from n8n
+        if: steps.check.outputs.skip_sync != 'true'
+        id: node
+        run: |
+          NODE_VERSION=$(jq -r '.engines.node' package.json | grep -oE '[0-9]+' | head -1)
+          echo "version=$NODE_VERSION" >> $GITHUB_OUTPUT
+          echo "Using Node.js version: $NODE_VERSION"
+
       - name: Setup Node.js
         if: steps.check.outputs.skip_sync != 'true'
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: ${{ steps.node.outputs.version }}
 
       - name: Regenerate Lockfile
         if: steps.check.outputs.skip_sync != 'true'
         run: |
+          rm -f pnpm-lock.yaml
           npm install -g pnpm
-          pnpm install --no-frozen-lockfile
+          pnpm install
           git add pnpm-lock.yaml
           if ! git diff --cached --quiet; then
             git commit -m "chore: regenerate pnpm-lock.yaml"
