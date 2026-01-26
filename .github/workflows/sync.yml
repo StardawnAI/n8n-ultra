@@ -168,3 +168,10 @@ jobs:
             echo "Release creation failed (Attempt $i). Waiting 20s..."
             sleep 20
           done
+
+      - name: Trigger n8n-advanced-ns rebuild
+        if: steps.check.outputs.skip_sync != 'true'
+        run: |
+          gh workflow run sync.yml --repo StardawnAI/n8n-advanced-ns
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
