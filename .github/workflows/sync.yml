@@ -17,19 +17,17 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.GH_PAT }}
-          
+
       - name: Configure Git
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          
-      - name: Sync with latest RELEASE (not master)
-        id: sync
+
+      - name: Check if rebuild needed
+        id: check
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # --- RETRY LOOP 1: Get Version ---
-          echo "Fetching Latest Release (5 attempts)..."
           for i in {1..5}; do
             LATEST_RELEASE=$(gh release view --repo n8n-io/n8n --json tagName --jq .tagName) && break
             echo "Error fetching version (Attempt $i). Waiting 10s..."
@@ -41,23 +39,17 @@ jobs:
             exit 1
           fi
 
-          # --- CHECK IF REBUILD NEEDED ---
-          # Rule 1: If n8n's latest release tag is different from ours → Rebuild
-          # Rule 2: If same version but we pushed new code → Rebuild
-          # Rule 3: If nothing is new → EXIT 0 (do nothing)
-          
-          # STEP 1: Get OUR current release tag name (not commit, just the tag name)
+          echo "version=$LATEST_RELEASE" >> $GITHUB_OUTPUT
+
           OUR_LATEST_TAG=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 1 --json tagName --jq '.[0].tagName' 2>/dev/null || echo "")
-          
+
           echo "n8n's latest release: $LATEST_RELEASE"
           echo "Our latest release: $OUR_LATEST_TAG"
-          
-          # STEP 2: Compare tag names
+
           if [ "$LATEST_RELEASE" != "$OUR_LATEST_TAG" ]; then
-            echo "n8n has a new release ($LATEST_RELEASE). Proceeding with sync..."
+            echo "n8n has a new release ($LATEST_RELEASE). Proceeding..."
+            echo "skip_sync=false" >> $GITHUB_OUTPUT
           else
-            # Same version - check if we pushed new code
-            # Get the commit our release tag points to
             TAG_INFO=$(gh api repos/$GITHUB_REPOSITORY/git/refs/tags/$OUR_LATEST_TAG 2>/dev/null || echo "")
             if [ -n "$TAG_INFO" ]; then
               TAG_TYPE=$(echo "$TAG_INFO" | jq -r '.object.type')
@@ -70,164 +62,109 @@ jobs:
             else
               RELEASE_COMMIT="none"
             fi
-            
+
             CURRENT_HEAD=$(git rev-parse HEAD)
-            
+
             echo "Our release commit: $RELEASE_COMMIT"
             echo "Current HEAD: $CURRENT_HEAD"
-            
+
             if [ "$RELEASE_COMMIT" = "$CURRENT_HEAD" ]; then
               echo "=== NOTHING IS NEW. Skipping all remaining steps. ==="
-              echo "skip_release=true" >> $GITHUB_OUTPUT
-              exit 0
+              echo "skip_sync=true" >> $GITHUB_OUTPUT
             else
               echo "We pushed new code since last release. Rebuilding..."
+              echo "skip_sync=false" >> $GITHUB_OUTPUT
             fi
           fi
-          # ------------------------------
-          
-          echo "Syncing with release: $LATEST_RELEASE"
-          
+
+      - name: Sync from n8n-io/n8n
+        if: steps.check.outputs.skip_sync != 'true'
+        run: |
+          LATEST_RELEASE="${{ steps.check.outputs.version }}"
+
           git remote add upstream https://github.com/n8n-io/n8n.git || true
-          
-          # --- RETRY LOOP 2: Git Fetch ---
-          echo "Running git fetch (with retries)..."
+
           for i in {1..5}; do
             git fetch upstream --tags --force && break
             echo "Git fetch failed (Attempt $i). Waiting 10s..."
             sleep 10
           done
-          
-          # Try merge with -X ours. If it fails, resolve manually in loop.
-          if ! git merge "$LATEST_RELEASE" --allow-unrelated-histories -X ours; then
-            echo "Merge conflict detected. Starting manual resolution..."
-            CONFLICTS=$(git diff --name-only --diff-filter=U)
-            
-            for file in $CONFLICTS; do
-              echo "Resolving: $file"
-              echo "   -> Taking OUR version (Ours)"
-              if git ls-tree -r HEAD --name-only | grep -q "^$file$"; then
-                # We have the file -> Keep our version
-                git checkout --ours -- "$file"
-                git add "$file"
-              else
-                # We deleted the file -> Keep it deleted
-                git rm "$file"
-              fi
-            done
-            
-            if [ -n "$(git diff --name-only --diff-filter=U)" ]; then
-              echo "ERROR: Unresolved conflicts remain."
-              exit 1
-            fi
-            
-            git commit -m "Merge release $LATEST_RELEASE (Automatic Conflict Resolution)"
-          fi
-          
-          # --- WORKFLOW CLEANUP ---
-          echo "Cleaning up upstream workflows..."
-          
-          # 1. Delete ALL workflows in the folder (removes n8n junk + our files temporarily)
+
+          git merge "$LATEST_RELEASE" --no-edit --allow-unrelated-histories -X theirs || true
+
+          git checkout "$LATEST_RELEASE" -- packages/
+
+      - name: Clean up Workflows
+        if: steps.check.outputs.skip_sync != 'true'
+        run: |
           git rm -r --ignore-unmatch .github/workflows/
-          
-          # 2. Restore YOUR workflows from the original commit
           git checkout ${{ github.sha }} -- .github/workflows/
-          
           git add .github/workflows/
           if ! git diff --cached --quiet; then
-            git commit -m "Restore custom workflows from original state"
+            git commit -m "Restore custom workflows"
           fi
-          # ------------------------
 
-          # --- INJECT CUSTOM NODES ---
-          echo "Injecting custom nodes into package.json..."
-          
-          # Make script executable just in case
+      - name: Inject Custom Nodes
+        if: steps.check.outputs.skip_sync != 'true'
+        run: |
           chmod +x .github/scripts/inject-custom-nodes.sh
-          
-          # Run the injection script
           bash .github/scripts/inject-custom-nodes.sh
-          
-          # Commit the injection
           git add packages/nodes-base/package.json
           if ! git diff --cached --quiet; then
-             git commit -m "Inject Custom Nodes into package.json"
+            git commit -m "Inject Custom Nodes"
           fi
-          # ---------------------------
 
-          
-          
-          
-          
-          # --- REGENERATE LOCKFILE ---
-          echo "Regenerating pnpm-lock.yaml after upstream merge..."
-          
-          # Enable corepack (uses pnpm version from package.json)
-          corepack enable
-          corepack prepare pnpm@latest-10 --activate
-          
-          # Regenerate lockfile (this updates it to match all package.json files)
+      - name: Setup Node.js
+        if: steps.check.outputs.skip_sync != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Regenerate Lockfile
+        if: steps.check.outputs.skip_sync != 'true'
+        run: |
+          npm install -g pnpm
           pnpm install --no-frozen-lockfile
-          
-          # Commit updated lockfile
           git add pnpm-lock.yaml
           if ! git diff --cached --quiet; then
-            git commit -m "chore: regenerate pnpm-lock.yaml after upstream sync"
+            git commit -m "chore: regenerate pnpm-lock.yaml"
           fi
-          # ---------------------------
 
-
-          
-          
+      - name: Push Changes
+        if: steps.check.outputs.skip_sync != 'true'
+        run: |
           git remote set-url origin https://${{ secrets.GH_PAT }}@github.com/${{ github.repository }}.git
-          
-          # --- RETRY LOOP 3: Git Push ---
           for i in {1..5}; do
-              git push origin master && break
-              echo "Git push failed (Attempt $i). Waiting 15s..."
-              sleep 15
+            git push origin master && break
+            echo "Git push failed (Attempt $i). Waiting 15s..."
+            sleep 15
           done
-          
-      - name: Create our Release
-        if: steps.sync.outputs.skip_release != 'true'
+
+      - name: Create Release
+        if: steps.check.outputs.skip_sync != 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}
         run: |
-          # Fetch tag again to be safe
-          LATEST_RELEASE=$(gh release view --repo n8n-io/n8n --json tagName --jq .tagName)
+          LATEST_RELEASE="${{ steps.check.outputs.version }}"
 
-          # Delete old release with tag if it exists (allows rebuild with new code)
           gh release delete "$LATEST_RELEASE" --repo "$GITHUB_REPOSITORY" --cleanup-tag -y 2>/dev/null || true
 
-          # Recreate tag on current HEAD
           git tag -f "$LATEST_RELEASE"
           git push origin "$LATEST_RELEASE" -f
 
-          # Get latest commit info for release title/notes
+          STARDAWN_VERSION=$(cat STARDAWN_VERSION 2>/dev/null || echo "1.0")
           COMMIT_TITLE=$(git log -1 --pretty=%s)
           COMMIT_BODY=$(git log -1 --pretty=%b)
-          
-          # Read stardawn version
-          STARDAWN_VERSION=$(cat STARDAWN_VERSION 2>/dev/null || echo "1.0")
-          
-          # Build release title with both versions
+
           RELEASE_TITLE="n8n-advanced Release $LATEST_RELEASE stardawn@$STARDAWN_VERSION"
-          
-          # Build release notes using printf (avoid heredoc YAML issues)
           RELEASE_NOTES=$(printf "## n8n-advanced Release %s stardawn@%s\n\n**n8n Base Version:** %s\n**Stardawn Version:** %s\n\n---\n\n### Latest Changes\n%s\n\n%s" "$LATEST_RELEASE" "$STARDAWN_VERSION" "$LATEST_RELEASE" "$STARDAWN_VERSION" "$COMMIT_TITLE" "$COMMIT_BODY")
 
-          # --- RETRY LOOP 4: Create Release ---
-          echo "Creating Release on GitHub (5 attempts)..."
           for i in {1..5}; do
-            (
-              # Subshell to retry the entire block
-              gh release create "$LATEST_RELEASE" \
-                --repo "$GITHUB_REPOSITORY" \
-                --title "$RELEASE_TITLE" \
-                --notes "$RELEASE_NOTES" \
-                --latest
-            ) && break
-            
-            echo "Release creation failed (Attempt $i). Waiting 20 seconds..."
+            gh release create "$LATEST_RELEASE" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "$RELEASE_TITLE" \
+              --notes "$RELEASE_NOTES" \
+              --latest && break
+            echo "Release creation failed (Attempt $i). Waiting 20s..."
             sleep 20
           done
