@@ -30,7 +30,6 @@ jobs:
         run: |
           for i in {1..5}; do
             LATEST_RELEASE=$(gh release view --repo n8n-io/n8n --json tagName --jq .tagName) && break
-            echo "Error fetching version (Attempt $i). Waiting 10s..."
             sleep 10
           done
 
@@ -65,19 +64,16 @@ jobs:
 
             CURRENT_HEAD=$(git rev-parse HEAD)
 
-            echo "Our release commit: $RELEASE_COMMIT"
-            echo "Current HEAD: $CURRENT_HEAD"
-
             if [ "$RELEASE_COMMIT" = "$CURRENT_HEAD" ]; then
-              echo "=== NOTHING IS NEW. Skipping all remaining steps. ==="
+              echo "=== NOTHING IS NEW. Skipping. ==="
               echo "skip_sync=true" >> $GITHUB_OUTPUT
             else
-              echo "We pushed new code since last release. Rebuilding..."
+              echo "New code since last release. Rebuilding..."
               echo "skip_sync=false" >> $GITHUB_OUTPUT
             fi
           fi
 
-      - name: Sync from n8n-io/n8n
+      - name: Sync n8n code
         if: steps.check.outputs.skip_sync != 'true'
         run: |
           LATEST_RELEASE="${{ steps.check.outputs.version }}"
@@ -86,33 +82,22 @@ jobs:
 
           for i in {1..5}; do
             git fetch upstream --tags --force && break
-            echo "Git fetch failed (Attempt $i). Waiting 10s..."
             sleep 10
           done
 
-          git merge "$LATEST_RELEASE" --no-edit --allow-unrelated-histories -X theirs || true
-
           git checkout "$LATEST_RELEASE" -- packages/
-
-      - name: Clean up Workflows
-        if: steps.check.outputs.skip_sync != 'true'
-        run: |
-          git rm -r --ignore-unmatch .github/workflows/
-          git checkout ${{ github.sha }} -- .github/workflows/
-          git add .github/workflows/
-          if ! git diff --cached --quiet; then
-            git commit -m "Restore custom workflows"
-          fi
+          git checkout "$LATEST_RELEASE" -- package.json
+          git checkout "$LATEST_RELEASE" -- pnpm-lock.yaml
+          git checkout "$LATEST_RELEASE" -- pnpm-workspace.yaml
+          git checkout "$LATEST_RELEASE" -- turbo.json
+          git checkout "$LATEST_RELEASE" -- tsconfig.json
+          git checkout "$LATEST_RELEASE" -- .npmrc
 
       - name: Inject Custom Nodes
         if: steps.check.outputs.skip_sync != 'true'
         run: |
           chmod +x .github/scripts/inject-custom-nodes.sh
           bash .github/scripts/inject-custom-nodes.sh
-          git add packages/nodes-base/package.json
-          if ! git diff --cached --quiet; then
-            git commit -m "Inject Custom Nodes"
-          fi
 
       - name: Get Node.js version from n8n
         if: steps.check.outputs.skip_sync != 'true'
@@ -120,7 +105,6 @@ jobs:
         run: |
           NODE_VERSION=$(jq -r '.engines.node' package.json | grep -oE '[0-9]+' | head -1)
           echo "version=$NODE_VERSION" >> $GITHUB_OUTPUT
-          echo "Using Node.js version: $NODE_VERSION"
 
       - name: Setup Node.js
         if: steps.check.outputs.skip_sync != 'true'
@@ -128,25 +112,21 @@ jobs:
         with:
           node-version: ${{ steps.node.outputs.version }}
 
-      - name: Regenerate Lockfile
+      - name: Install Dependencies
         if: steps.check.outputs.skip_sync != 'true'
         run: |
-          rm -f pnpm-lock.yaml
           npm install -g pnpm
-          jq 'del(.pnpm.patchedDependencies)' package.json > tmp.json && mv tmp.json package.json
-          pnpm install
-          git add pnpm-lock.yaml package.json
-          if ! git diff --cached --quiet; then
-            git commit -m "chore: regenerate pnpm-lock.yaml"
-          fi
+          pnpm install --frozen-lockfile
 
-      - name: Push Changes
+      - name: Commit and Push
         if: steps.check.outputs.skip_sync != 'true'
         run: |
+          git add -A
+          git commit -m "chore: sync n8n ${{ steps.check.outputs.version }}"
+
           git remote set-url origin https://${{ secrets.GH_PAT }}@github.com/${{ github.repository }}.git
           for i in {1..5}; do
             git push origin master && break
-            echo "Git push failed (Attempt $i). Waiting 15s..."
             sleep 15
           done
 
@@ -163,21 +143,12 @@ jobs:
           git push origin "$LATEST_RELEASE" -f
 
           STARDAWN_VERSION=$(cat STARDAWN_VERSION 2>/dev/null || echo "1.0")
-          COMMIT_TITLE=$(git log -1 --pretty=%s)
-          COMMIT_BODY=$(git log -1 --pretty=%b)
 
-          RELEASE_TITLE="n8n-advanced Release $LATEST_RELEASE stardawn@$STARDAWN_VERSION"
-          RELEASE_NOTES=$(printf "## n8n-advanced Release %s stardawn@%s\n\n**n8n Base Version:** %s\n**Stardawn Version:** %s\n\n---\n\n### Latest Changes\n%s\n\n%s" "$LATEST_RELEASE" "$STARDAWN_VERSION" "$LATEST_RELEASE" "$STARDAWN_VERSION" "$COMMIT_TITLE" "$COMMIT_BODY")
-
-          for i in {1..5}; do
-            gh release create "$LATEST_RELEASE" \
-              --repo "$GITHUB_REPOSITORY" \
-              --title "$RELEASE_TITLE" \
-              --notes "$RELEASE_NOTES" \
-              --latest && break
-            echo "Release creation failed (Attempt $i). Waiting 20s..."
-            sleep 20
-          done
+          gh release create "$LATEST_RELEASE" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "n8n-advanced $LATEST_RELEASE stardawn@$STARDAWN_VERSION" \
+            --notes "n8n Base: $LATEST_RELEASE | Stardawn: $STARDAWN_VERSION" \
+            --latest
 
       - name: Trigger n8n-advanced-ns rebuild
         if: steps.check.outputs.skip_sync != 'true'
