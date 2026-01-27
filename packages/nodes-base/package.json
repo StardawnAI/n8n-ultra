@@ -407,9 +407,7 @@
       "dist/credentials/ZoomApi.credentials.js",
       "dist/credentials/ZoomOAuth2Api.credentials.js",
       "dist/credentials/ZscalerZiaApi.credentials.js",
-      "dist/credentials/ZulipApi.credentials.js",
-      "dist/credentials/RembergApi.credentials.js",
-      "dist/credentials/WhatsappPrivateApi.credentials.js"
+      "dist/credentials/ZulipApi.credentials.js"
     ],
     "nodes": [
       "dist/nodes/ActionNetwork/ActionNetwork.node.js",
@@ -845,9 +843,7 @@
       "dist/nodes/Transform/RemoveDuplicates/RemoveDuplicates.node.js",
       "dist/nodes/Transform/SplitOut/SplitOut.node.js",
       "dist/nodes/Transform/Sort/Sort.node.js",
-      "dist/nodes/Transform/Summarize/Summarize.node.js",
-      "dist/nodes/Remberg/Remberg.node.js",
-      "dist/nodes/WhatsappPrivate/WhatsappPrivate.node.js"
+      "dist/nodes/Transform/Summarize/Summarize.node.js"
     ]
   },
   "devDependencies": {
