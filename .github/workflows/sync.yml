@@ -182,6 +182,6 @@ jobs:
       - name: Trigger n8n-advanced-ns rebuild
         if: steps.check.outputs.skip_sync != 'true'
         run: |
-          gh workflow run sync.yml --repo StardawnAI/n8n-advanced-ns
+          gh workflow run sync.yml --repo StardawnAI/n8n-advanced-ns || true
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}
