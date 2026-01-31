@@ -11,7 +11,7 @@ RUN apk update && apk add --no-cache \
     libx11-dev libxtst-dev xorg-server tesseract-ocr python3 py3-pip \
     git curl wget vim bash postgresql-client mysql-client
 
-# Step 2: Copy files only (no Python package installation)
+# Step 2: Copy files only (no Python package installation - installation occurs under setup-defaults.sh)
 RUN mkdir -p /usr/src/app/default-workflows
 COPY workflows/ /usr/src/app/default-workflows/
 COPY initial-credentials/ /usr/src/app/initial-credentials/
