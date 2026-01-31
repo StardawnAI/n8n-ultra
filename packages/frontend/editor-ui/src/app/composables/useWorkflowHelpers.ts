@@ -46,6 +46,7 @@ import { useUIStore } from '@/app/stores/ui.store';
 import { useWorkflowsStore } from '@/app/stores/workflows.store';
 import { getSourceItems } from '@/app/utils/pairedItemUtils';
 import { getCredentialTypeName, isCredentialOnlyNodeType } from '@/app/utils/credentialOnlyNodes';
+import { convertWorkflowTagsToIds } from '@/app/utils/workflowUtils';
 import { useI18n } from '@n8n/i18n';
 import { useProjectsStore } from '@/features/collaboration/projects/projects.store';
 import { useTagsStore } from '@/features/shared/tags/tags.store';
@@ -844,14 +845,13 @@ export function useWorkflowHelpers() {
 		}
 
 		const workflow = await workflowsStore.updateWorkflow(workflowId, data);
-		workflowsStore.setWorkflowVersionId(workflow.versionId);
-		if (workflow.checksum) {
-			workflowsStore.setWorkflowChecksum(workflow.checksum);
+		if (!workflow.checksum) {
+			throw new Error('Failed to update workflow');
 		}
 
 		if (isCurrentWorkflow) {
 			workflowState.setActive(workflow.activeVersionId);
-			uiStore.stateIsDirty = false;
+			uiStore.markStateClean();
 		}
 
 		if (workflow.activeVersion) {
@@ -948,13 +948,10 @@ export function useWorkflowHelpers() {
 			setStateDirty: uiStore.stateIsDirty,
 		});
 		ws.setWorkflowSettings(workflowData.settings ?? {});
-		workflowsStore.setWorkflowPinData(workflowData.pinData ?? {});
-		workflowsStore.setWorkflowVersionId(workflowData.versionId);
-		if (workflowData.checksum) {
-			workflowsStore.setWorkflowChecksum(workflowData.checksum);
-		}
-		workflowsStore.setWorkflowMetadata(workflowData.meta);
-		workflowsStore.setWorkflowScopes(workflowData.scopes);
+		ws.setWorkflowPinData(workflowData.pinData ?? {});
+		workflowsStore.setWorkflowVersionId(workflowData.versionId, workflowData.checksum);
+		ws.setWorkflowMetadata(workflowData.meta);
+		ws.setWorkflowScopes(workflowData.scopes);
 
 		if ('activeVersion' in workflowData) {
 			workflowsStore.setWorkflowActiveVersion(workflowData.activeVersion ?? null);
@@ -972,8 +969,7 @@ export function useWorkflowHelpers() {
 		}
 
 		const tags = (workflowData.tags ?? []) as ITag[];
-		const tagIds = tags.map((tag) => tag.id);
-		ws.setWorkflowTagIds(tagIds || []);
+		ws.setWorkflowTagIds(convertWorkflowTagsToIds(tags));
 		tagsStore.upsertTags(tags);
 	}
 

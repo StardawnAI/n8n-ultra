@@ -243,10 +243,6 @@ export const useSettingsStore = defineStore(STORES.SETTINGS, () => {
 		// as it is needed to determine if the MFA setup page should be shown
 		isMFAEnforced.value = settings.value.mfa?.enforced ?? false;
 
-		// Set MFA enforced state even for public settings mode
-		// as it is needed to determine if the MFA setup page should be shown
-		isMFAEnforced.value = settings.value.mfa?.enforced ?? false;
-
 		if (fetchedSettings.settingsMode === 'public') {
 			// public settings mode is typically used for unauthenticated users
 			// when public settings are returned we can skip the rest of the setup

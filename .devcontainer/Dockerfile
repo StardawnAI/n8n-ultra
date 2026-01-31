@@ -1,4 +1,4 @@
-FROM n8nio/n8n:next
+FROM n8nio/n8n:latest
 
 USER root
 
@@ -11,7 +11,7 @@ RUN apk update && apk add --no-cache \
     libx11-dev libxtst-dev xorg-server tesseract-ocr python3 py3-pip \
     git curl wget vim bash postgresql-client mysql-client
 
-# Step 2: Copy files only (no Python package installation)
+# Step 2: Copy files only (no Python package installation - installation occurs under setup-defaults.sh)
 RUN mkdir -p /usr/src/app/default-workflows
 COPY workflows/ /usr/src/app/default-workflows/
 COPY initial-credentials/ /usr/src/app/initial-credentials/
@@ -32,4 +32,4 @@ RUN chown -R node:node /home/node /usr/src/app
 USER node
 
 # Step 5: Use sh explicitly to run the script
-ENTRYPOINT ["/bin/sh", "/usr/local/bin/setup-defaults.sh"]
+CMD ["/bin/sh", "-c", "/usr/local/bin/setup-defaults.sh"]

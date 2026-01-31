@@ -25,3 +25,14 @@
 !docker/images/n8n/docker-entrypoint.sh
 !docker/images/runners
 !docker/images/runners/n8n-task-runners.json
+
+# === .devcontainer/Dockerfile ===
+!.devcontainer
+!.devcontainer/setup-defaults.sh
+!workflows/
+!workflows/**
+!initial-credentials/
+!initial-credentials/**
+!requirements.txt
+!workflows-static/
+!workflows-static/**

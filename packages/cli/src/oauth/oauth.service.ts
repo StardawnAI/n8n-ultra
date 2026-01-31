@@ -150,12 +150,14 @@ export class OauthService {
 		decryptedData: ICredentialDataDecryptedObject,
 		additionalData: IWorkflowExecuteAdditionalData,
 	) {
+		const canUseExternalSecrets =
+			await this.credentialsHelper.credentialCanUseExternalSecrets(credential);
 		return (await this.credentialsHelper.applyDefaultsAndOverwrites(
 			additionalData,
 			decryptedData,
-			credential,
 			credential.type,
 			'internal',
+			canUseExternalSecrets,
 			undefined,
 			undefined,
 		)) as unknown as T;
@@ -220,7 +222,8 @@ export class OauthService {
 			};
 		}
 
-		if (decryptedState.userId !== req.user?.id) {
+		// if we skip auth on oauth callback, we cannot validate user id
+		if (!skipAuthOnOAuthCallback && decryptedState.userId !== req.user?.id) {
 			throw new AuthError('Unauthorized');
 		}
 
