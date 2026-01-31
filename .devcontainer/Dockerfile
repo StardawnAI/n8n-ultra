@@ -32,4 +32,4 @@ RUN chown -R node:node /home/node /usr/src/app
 USER node
 
 # Step 5: Use sh explicitly to run the script
-ENTRYPOINT ["/bin/sh", "/usr/local/bin/setup-defaults.sh"]
+CMD ["/bin/sh", "-c", "/usr/local/bin/setup-defaults.sh"]
