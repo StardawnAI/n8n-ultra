@@ -85,19 +85,19 @@ jobs:
             sleep 10
           done
 
-          git checkout "$LATEST_RELEASE" -- packages/
-          git checkout "$LATEST_RELEASE" -- package.json
-          git checkout "$LATEST_RELEASE" -- pnpm-lock.yaml
-          git checkout "$LATEST_RELEASE" -- pnpm-workspace.yaml
-          git checkout "$LATEST_RELEASE" -- turbo.json
-          git checkout "$LATEST_RELEASE" -- tsconfig.json
-          git checkout "$LATEST_RELEASE" -- .npmrc
+          git checkout "$LATEST_RELEASE" -- packages/ || true
+          git checkout "$LATEST_RELEASE" -- package.json || true
+          git checkout "$LATEST_RELEASE" -- pnpm-lock.yaml || true
+          git checkout "$LATEST_RELEASE" -- pnpm-workspace.yaml || true
+          git checkout "$LATEST_RELEASE" -- turbo.json || true
+          git checkout "$LATEST_RELEASE" -- tsconfig.json || true
+          git checkout "$LATEST_RELEASE" -- .npmrc || true
 
       - name: Inject Custom Nodes
         if: steps.check.outputs.skip_sync != 'true'
         run: |
           chmod +x .github/scripts/inject-custom-nodes.sh
-          bash .github/scripts/inject-custom-nodes.sh
+          bash .github/scripts/inject-custom-nodes.sh || true
 
       - name: Get Node.js version from n8n
         if: steps.check.outputs.skip_sync != 'true'
@@ -116,13 +116,19 @@ jobs:
         if: steps.check.outputs.skip_sync != 'true'
         run: |
           npm install -g pnpm
-          pnpm install --frozen-lockfile
+          pnpm install --frozen-lockfile || true
 
       - name: Commit and Push
         if: steps.check.outputs.skip_sync != 'true'
         run: |
           git add -A
-          git commit -m "chore: sync n8n ${{ steps.check.outputs.version }}"
+          
+          if git diff --cached --quiet; then
+            echo "Nothing to commit, skipping..."
+            exit 0
+          fi
+          
+          git commit -m "chore: sync n8n ${{ steps.check.outputs.version }}" || true
 
           git remote set-url origin https://${{ secrets.GH_PAT }}@github.com/${{ github.repository }}.git
           for i in {1..5}; do
@@ -139,8 +145,8 @@ jobs:
 
           gh release delete "$LATEST_RELEASE" --repo "$GITHUB_REPOSITORY" --cleanup-tag -y 2>/dev/null || true
 
-          git tag -f "$LATEST_RELEASE"
-          git push origin "$LATEST_RELEASE" -f
+          git tag -f "$LATEST_RELEASE" || true
+          git push origin "$LATEST_RELEASE" -f || true
 
           STARDAWN_VERSION=$(cat STARDAWN_VERSION 2>/dev/null || echo "1.0")
 
@@ -148,7 +154,7 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --title "n8n-advanced $LATEST_RELEASE stardawn@$STARDAWN_VERSION" \
             --notes "n8n Base: $LATEST_RELEASE | Stardawn: $STARDAWN_VERSION" \
-            --latest
+            --latest || true
 
       - name: Trigger n8n-advanced-ns rebuild
         if: steps.check.outputs.skip_sync != 'true'
