@@ -1,4 +1,4 @@
-FROM n8nio/base:22.21.1 AS alpine
+FROM alpine:latest AS alpine
 FROM n8nio/n8n:latest
 USER root
 # Restore apk from Alpine
@@ -7,16 +7,16 @@ COPY --from=alpine /usr/lib/libapk.so* /usr/lib/
 COPY --from=alpine /etc/apk/repositories /etc/apk/repositories
 COPY --from=alpine /etc/apk/keys/ /etc/apk/keys/
 # Step 1: Install system-level build and runtime dependencies
-RUN apk update && apk add --no-cache \
+RUN apk update && apk add --no-cache --force-overwrite \
     build-base gcc g++ gfortran musl-dev python3-dev linux-headers \
     openblas-dev lapack-dev freetype-dev libpng-dev jpeg-dev \
     libxml2-dev libxslt-dev libffi-dev openssl-dev
-RUN apk add --no-cache \
+RUN apk add --no-cache --force-overwrite \
     rustc cargo \
     curl-dev libpq-dev \
     tesseract-ocr python3 py3-pip \
     git curl wget vim bash
-RUN apk add --no-cache \
+RUN apk add --no-cache --force-overwrite \
     postgresql-client mysql-client
 
 # Step 2: Copy files only (no Python package installation - installation occurs under setup-defaults.sh)
