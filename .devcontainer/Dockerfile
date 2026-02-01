@@ -1,7 +1,9 @@
+FROM alpine:latest AS alpine
 FROM n8nio/n8n:latest
-
 USER root
-
+# Restore apk from Alpine
+COPY --from=alpine /sbin/apk /sbin/apk
+COPY --from=alpine /usr/lib/libapk.so* /usr/lib/
 # Step 1: Install system-level build and runtime dependencies
 RUN apk update && apk add --no-cache \
     build-base gcc g++ gfortran musl-dev python3-dev linux-headers \
