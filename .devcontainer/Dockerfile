@@ -1,4 +1,4 @@
-FROM alpine:latest AS alpine
+FROM n8nio/base:22.21.1 AS alpine
 FROM n8nio/n8n:latest
 USER root
 # Restore apk from Alpine
