@@ -7,7 +7,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libcurl4-openssl-dev libpq-dev default-libmysqlclient-dev \
     libgdal-dev libproj-dev libgeos-dev \
     libx11-dev libxtst-dev xorg tesseract-ocr python3 python3-pip \
-    git curl wget vim bash postgresql-client mysql-client && \
+    git curl wget vim bash postgresql-client default-mysql-client && \
     rm -rf /var/lib/apt/lists/*
 RUN mkdir -p /usr/src/app/default-workflows
 COPY workflows/ /usr/src/app/default-workflows/
