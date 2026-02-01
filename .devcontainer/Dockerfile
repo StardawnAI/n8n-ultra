@@ -1,42 +1,24 @@
-FROM alpine:3.21 AS alpine
-FROM n8nio/n8n:latest
+FROM n8nio/n8n:latest-debian
 USER root
-# Restore apk from Alpine
-COPY --from=alpine /sbin/apk /sbin/apk
-COPY --from=alpine /usr/lib/libapk.so* /usr/lib/
-COPY --from=alpine /etc/apk/keys/ /etc/apk/keys/
-# Step 1: Install system-level build and runtime dependencies
-RUN apk update && apk add --no-cache --force-overwrite \
-    build-base gcc g++ gfortran musl-dev python3-dev linux-headers \
-    openblas-dev lapack-dev freetype-dev libpng-dev jpeg-dev \
-    libxml2-dev libxslt-dev libffi-dev openssl-dev
-RUN apk add --no-cache --force-overwrite \
-    rustc cargo \
-    curl-dev libpq-dev \
-    tesseract-ocr python3 py3-pip \
-    git curl wget vim bash
-RUN apk add --no-cache --force-overwrite \
-    postgresql-client mysql-client
-
-# Step 2: Copy files only (no Python package installation - installation occurs under setup-defaults.sh)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential gcc g++ gfortran python3-dev \
+    libopenblas-dev liblapack-dev libfreetype6-dev libpng-dev libjpeg-dev \
+    libxml2-dev libxslt1-dev libffi-dev libssl-dev rustc cargo \
+    libcurl4-openssl-dev libpq-dev default-libmysqlclient-dev \
+    libgdal-dev libproj-dev libgeos-dev \
+    libx11-dev libxtst-dev xorg tesseract-ocr python3 python3-pip \
+    git curl wget vim bash postgresql-client mysql-client && \
+    rm -rf /var/lib/apt/lists/*
 RUN mkdir -p /usr/src/app/default-workflows
 COPY workflows/ /usr/src/app/default-workflows/
 COPY initial-credentials/ /usr/src/app/initial-credentials/
 COPY requirements.txt /tmp/requirements.txt
-
-# Step 3: Copy and fix the setup script
 COPY .devcontainer/setup-defaults.sh /tmp/setup-defaults.sh
 RUN echo '#!/bin/sh' > /usr/local/bin/setup-defaults.sh && \
     tr -d '\r' < /tmp/setup-defaults.sh >> /usr/local/bin/setup-defaults.sh && \
     chmod +x /usr/local/bin/setup-defaults.sh && \
     rm /tmp/setup-defaults.sh
-
 COPY workflows-static/ /usr/src/app/workflows-static/
-
-
-# Step 4: Set correct ownership and switch back to the non-root user
 RUN chown -R node:node /home/node /usr/src/app
 USER node
-
-# Step 5: Use sh explicitly to run the script
 CMD ["/bin/sh", "-c", "/usr/local/bin/setup-defaults.sh"]
