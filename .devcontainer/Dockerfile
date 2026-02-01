@@ -8,13 +8,14 @@ COPY --from=alpine /usr/lib/libapk.so* /usr/lib/
 RUN apk update && apk add --no-cache \
     build-base gcc g++ gfortran musl-dev python3-dev linux-headers \
     openblas-dev lapack-dev freetype-dev libpng-dev jpeg-dev \
-    libxml2-dev libxslt-dev libffi-dev openssl-dev rust cargo \
+    libxml2-dev libxslt-dev libffi-dev openssl-dev
+RUN apk add --no-cache \
+    rustc cargo \
     curl-dev libpq-dev \
     tesseract-ocr python3 py3-pip \
-    git curl wget vim bash postgresql-client mysql-client
+    git curl wget vim bash
 RUN apk add --no-cache \
-    mariadb-dev gdal-dev proj-dev geos-dev \
-    libx11-dev libxtst-dev xorg-server
+    postgresql-client mysql-client
 
 # Step 2: Copy files only (no Python package installation - installation occurs under setup-defaults.sh)
 RUN mkdir -p /usr/src/app/default-workflows
