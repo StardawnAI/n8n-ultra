@@ -37,18 +37,11 @@ jobs:
 
       - name: Package for Docker
         run: |
-          # Create compiled directory structure
           mkdir -p compiled
-          
-          # Copy built packages
           cp -r packages compiled/
           cp package.json compiled/
           cp pnpm-lock.yaml compiled/
           cp pnpm-workspace.yaml compiled/
-          
-          # Install production dependencies only
-          cd compiled
-          pnpm install --prod --frozen-lockfile || true
 
       - name: Log in to Container Registry (GHCR)
         uses: docker/login-action@v3
