@@ -26,24 +26,40 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
-          cache: 'pnpm'
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: Inject Stardawn Nodes/Credentials (safety)
+        run: |
+          set -euo pipefail
+          chmod +x .github/scripts/stardawn-inject.sh
+          .github/scripts/stardawn-inject.sh
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile
 
       - name: Build n8n
-        run: pnpm build
+        run: |
+          set -euo pipefail
+          pnpm build
 
       - name: Package for Docker
         run: |
+          set -euo pipefail
+          rm -rf compiled
           mkdir -p compiled
+
           cp -r packages compiled/
           cp package.json compiled/
           cp pnpm-lock.yaml compiled/
-          cp pnpm-workspace.yaml compiled/
+          cp pnpm-workspace.yaml compiled/ || true
+          cp turbo.json compiled/ || true
+          cp tsconfig.json compiled/ || true
+          cp .npmrc compiled/ || true
 
-      - name: Log in to Container Registry (GHCR)
+      - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -59,12 +75,12 @@ jobs:
       - name: Get versions
         id: versions
         run: |
+          set -euo pipefail
           STARDAWN_VERSION=$(cat STARDAWN_VERSION 2>/dev/null || echo "1.0")
-          N8N_VERSION=$(gh release view --repo n8n-io/n8n --json tagName --jq .tagName | sed 's/n8n@//')
+          TAG="${{ github.ref_name }}"
+          N8N_VERSION="$(echo "$TAG" | sed 's/^n8n@//')"
           echo "stardawn=$STARDAWN_VERSION" >> $GITHUB_OUTPUT
           echo "n8n=$N8N_VERSION" >> $GITHUB_OUTPUT
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract metadata
         id: meta
