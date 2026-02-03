@@ -6,7 +6,7 @@ workflows-static/** merge=ours
 initial-credentials/** merge=ours
 updates/** merge=ours
 docker-compose.yml merge=ours
-requirements.txt merge=ours
+#requirements.txt merge=ours
 STARDAWN_VERSION merge=ours
 CUSTOM_NODES.txt merge=ours
 
@@ -19,16 +19,21 @@ Custom-Node-Development-Guide.md merge=ours
 
 
 # custom script for adding custom nodes since we want to insert it into the node-base and credentials folder
-.github/scripts/inject-custom-nodes.sh merge=ours
+#.github/scripts/inject-custom-nodes.sh merge=ours
 
 # custom logic
-stardawn_setup/* merge=ours
+stardawn_setup/** merge=ours
+.github/scripts/stardawn-inject.sh merge=ours
 
 # Remberg Custom Node
-packages/nodes-base/nodes/Remberg/** merge=ours
+#packages/nodes-base/nodes/Remberg/** merge=ours
 packages/nodes-base/credentials/RembergApi.credentials.ts merge=ours
 
 
+.gitattributes merge=ours
+.gitignore merge=ours
+
+
 # WhatsApp Private Custom Node
-packages/nodes-base/nodes/WhatsappPrivate/** merge=ours
-packages/nodes-base/credentials/WhatsappPrivateApi.credentials.ts merge=ours
+#packages/nodes-base/nodes/WhatsappPrivate/** merge=ours
+#packages/nodes-base/credentials/WhatsappPrivateApi.credentials.ts merge=ours

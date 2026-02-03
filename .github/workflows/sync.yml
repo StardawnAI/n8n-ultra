@@ -1,4 +1,4 @@
-name: Auto Sync n8n-advanced with Upstream
+name: Auto Sync n8n-advanced with Upstream (MERGE)
 
 on:
   schedule:
@@ -33,71 +33,44 @@ jobs:
           set -euo pipefail
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          # enable "merge=ours" driver used by .gitattributes
+          git config --global merge.ours.driver true
 
-      - name: Check if rebuild needed
+      - name: Check upstream tag
         id: check
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
           set -euo pipefail
+
           LATEST_RELEASE="$(gh release view --repo "${UPSTREAM_REPO}" --json tagName --jq '.tagName')"
           [ -n "${LATEST_RELEASE:-}" ] || { echo "CRITICAL: no upstream tag"; exit 1; }
           echo "version=$LATEST_RELEASE" >> "$GITHUB_OUTPUT"
 
-          OUR_LATEST_TAG="$(gh release list --repo "$GITHUB_REPOSITORY" --limit 1 --json tagName --jq '.[0].tagName' 2>/dev/null || true)"
-          OUR_LATEST_TAG="${OUR_LATEST_TAG:-}"
+          # if tag already merged into HEAD -> skip
+          git remote add upstream "https://github.com/${UPSTREAM_REPO}.git" 2>/dev/null || true
+          git fetch upstream --tags --force
 
-          if [ -z "$OUR_LATEST_TAG" ] || [ "$LATEST_RELEASE" != "$OUR_LATEST_TAG" ]; then
-            echo "skip_sync=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          git fetch origin --tags --force
-          TAG_COMMIT="$(git rev-parse "refs/tags/$OUR_LATEST_TAG^{}" 2>/dev/null || echo "")"
-          HEAD_COMMIT="$(git rev-parse HEAD)"
-
-          if [ -n "$TAG_COMMIT" ] && [ "$TAG_COMMIT" = "$HEAD_COMMIT" ]; then
+          if git merge-base --is-ancestor "$LATEST_RELEASE" HEAD; then
             echo "skip_sync=true" >> "$GITHUB_OUTPUT"
           else
             echo "skip_sync=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Snapshot Stardawn overlay
-        if: steps.check.outputs.skip_sync != 'true'
-        run: |
-          set -euo pipefail
-          tar -czf /tmp/stardawn_overlay.tgz \
-            stardawn_setup \
-            .github \
-            .devcontainer \
-            workflows \
-            workflows-static \
-            initial-credentials \
-            STARDAWN_VERSION \
-            2>/dev/null || true
-
-      - name: Reset to upstream release tag (CLEAN)
+      - name: Merge upstream tag into our branch
         if: steps.check.outputs.skip_sync != 'true'
         run: |
           set -euo pipefail
           TAG="${{ steps.check.outputs.version }}"
-          git remote add upstream "https://github.com/${{ env.UPSTREAM_REPO }}.git" 2>/dev/null || true
-          git fetch upstream --tags --force
-          git checkout -B "${{ env.DEFAULT_BRANCH }}" "$TAG"
-          git reset --hard "$TAG"
-          git clean -fdx
 
-      - name: Restore overlay
-        if: steps.check.outputs.skip_sync != 'true'
-        run: |
-          set -euo pipefail
-          tar -xzf /tmp/stardawn_overlay.tgz -C . || true
+          # Prefer upstream on conflicts globally, except files protected by merge=ours in .gitattributes
+          git merge -X theirs --no-edit "$TAG"
 
       - name: Ensure jq
         if: steps.check.outputs.skip_sync != 'true'
         run: sudo apt-get update && sudo apt-get install -y jq
 
-      - name: Setup Node.js (from n8n engines)
+      - name: Setup Node.js (from n8n engines after merge)
         if: steps.check.outputs.skip_sync != 'true'
         id: node
         run: |
@@ -119,7 +92,7 @@ jobs:
           chmod +x .github/scripts/stardawn-inject.sh
           .github/scripts/stardawn-inject.sh
 
-      - name: Install deps + Build (fail hard)
+      - name: Install deps + Build (Corepack pnpm, no npm -g)
         if: steps.check.outputs.skip_sync != 'true'
         run: |
           set -euo pipefail
@@ -128,14 +101,13 @@ jobs:
           pnpm install --frozen-lockfile
           pnpm build
 
-
       - name: Commit and Push
         if: steps.check.outputs.skip_sync != 'true'
         run: |
           set -euo pipefail
           git add -A
           git diff --cached --quiet && exit 0
-          git commit -m "chore: sync n8n ${{ steps.check.outputs.version }}"
+          git commit -m "chore: merge n8n ${{ steps.check.outputs.version }}"
           git remote set-url origin "https://${{ secrets.GH_PAT }}@github.com/${{ github.repository }}.git"
           git push origin "${{ env.DEFAULT_BRANCH }}"
 
@@ -149,17 +121,10 @@ jobs:
           gh release delete "$TAG" --repo "$GITHUB_REPOSITORY" --cleanup-tag -y 2>/dev/null || true
           git tag -f "$TAG"
           git push origin "$TAG" -f
+
           STARDAWN_VERSION="$(cat STARDAWN_VERSION 2>/dev/null || echo "1.0")"
           gh release create "$TAG" \
             --repo "$GITHUB_REPOSITORY" \
             --title "n8n-advanced $TAG stardawn@$STARDAWN_VERSION" \
             --notes "n8n Base: $TAG | Stardawn: $STARDAWN_VERSION" \
             --latest
-
-      - name: Trigger n8n-advanced-ns rebuild
-        if: steps.check.outputs.skip_sync != 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GH_PAT }}
-        run: |
-          set -euo pipefail
-          gh workflow run sync.yml --repo StardawnAI/n8n-advanced-ns
