@@ -1,4 +1,4 @@
-name: Auto Sync n8n-advanced with Upstream (MERGE)
+name: Auto Sync n8n-advanced with Upstream
 
 on:
   schedule:
@@ -13,14 +13,9 @@ concurrency:
   group: n8n-advanced-sync
   cancel-in-progress: false
 
-env:
-  UPSTREAM_REPO: n8n-io/n8n
-  DEFAULT_BRANCH: master
-
 jobs:
   sync:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -33,57 +28,50 @@ jobs:
           set -euo pipefail
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          # enable "merge=ours" driver used by .gitattributes
-          git config --global merge.ours.driver true
 
-      - name: Check upstream tag
+      - name: Ensure jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Check if rebuild needed
         id: check
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
           set -euo pipefail
 
-          LATEST_RELEASE="$(gh release view --repo "${UPSTREAM_REPO}" --json tagName --jq '.tagName')"
-          [ -n "${LATEST_RELEASE:-}" ] || { echo "CRITICAL: no upstream tag"; exit 1; }
+          LATEST_RELEASE="$(gh release view --repo n8n-io/n8n --json tagName --jq .tagName)"
+          [ -n "${LATEST_RELEASE:-}" ] || { echo "CRITICAL: Could not find release tag"; exit 1; }
           echo "version=$LATEST_RELEASE" >> "$GITHUB_OUTPUT"
 
-          # if tag already merged into HEAD -> skip
-          git remote add upstream "https://github.com/${UPSTREAM_REPO}.git" 2>/dev/null || true
-          git fetch upstream --tags --force
+          OUR_LATEST_TAG="$(gh release list --repo "$GITHUB_REPOSITORY" --limit 1 --json tagName --jq '.[0].tagName' 2>/dev/null || true)"
+          OUR_LATEST_TAG="${OUR_LATEST_TAG:-}"
 
-          if git merge-base --is-ancestor "$LATEST_RELEASE" HEAD; then
+          if [ -z "$OUR_LATEST_TAG" ] || [ "$LATEST_RELEASE" != "$OUR_LATEST_TAG" ]; then
+            echo "skip_sync=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # if HEAD equals release commit -> skip
+          TAG_COMMIT="$(git rev-parse "refs/tags/$OUR_LATEST_TAG^{}" 2>/dev/null || echo "")"
+          HEAD_COMMIT="$(git rev-parse HEAD)"
+          if [ -n "$TAG_COMMIT" ] && [ "$TAG_COMMIT" = "$HEAD_COMMIT" ]; then
             echo "skip_sync=true" >> "$GITHUB_OUTPUT"
           else
             echo "skip_sync=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Merge upstream tag into our branch
+      - name: Sync n8n code (vendor drop)
         if: steps.check.outputs.skip_sync != 'true'
         run: |
           set -euo pipefail
           TAG="${{ steps.check.outputs.version }}"
 
-          # Prefer upstream on conflicts globally, except files protected by merge=ours in .gitattributes
-          git merge -X theirs --no-edit "$TAG"
+          git remote add upstream https://github.com/n8n-io/n8n.git 2>/dev/null || true
+          git fetch upstream --tags --force
 
-      - name: Ensure jq
-        if: steps.check.outputs.skip_sync != 'true'
-        run: sudo apt-get update && sudo apt-get install -y jq
-
-      - name: Setup Node.js (from n8n engines after merge)
-        if: steps.check.outputs.skip_sync != 'true'
-        id: node
-        run: |
-          set -euo pipefail
-          NODE_MAJOR="$(jq -r '.engines.node // empty' package.json | grep -oE '[0-9]+' | head -1 || true)"
-          [ -n "${NODE_MAJOR:-}" ] || NODE_MAJOR="22"
-          echo "version=$NODE_MAJOR" >> "$GITHUB_OUTPUT"
-
-      - name: Use Node.js
-        if: steps.check.outputs.skip_sync != 'true'
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ steps.node.outputs.version }}
+          # overwrite ONLY upstream-managed files
+          git checkout "$TAG" -- packages/
+          git checkout "$TAG" -- package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.json .npmrc CHANGELOG.md || true
 
       - name: Inject Stardawn nodes/credentials into nodes-base + patch package.json
         if: steps.check.outputs.skip_sync != 'true'
@@ -92,7 +80,21 @@ jobs:
           chmod +x .github/scripts/stardawn-inject.sh
           .github/scripts/stardawn-inject.sh
 
-      - name: Install deps + Build (Corepack pnpm, no npm -g)
+      - name: Setup Node.js (from n8n engines)
+        if: steps.check.outputs.skip_sync != 'true'
+        id: node
+        run: |
+          set -euo pipefail
+          NODE_VERSION="$(jq -r '.engines.node' package.json | grep -oE '[0-9]+' | head -1)"
+          echo "version=$NODE_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Use Node.js
+        if: steps.check.outputs.skip_sync != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+
+      - name: Install deps + Build (corepack pnpm)
         if: steps.check.outputs.skip_sync != 'true'
         run: |
           set -euo pipefail
@@ -107,11 +109,11 @@ jobs:
           set -euo pipefail
           git add -A
           git diff --cached --quiet && exit 0
-          git commit -m "chore: merge n8n ${{ steps.check.outputs.version }}"
-          git remote set-url origin "https://${{ secrets.GH_PAT }}@github.com/${{ github.repository }}.git"
-          git push origin "${{ env.DEFAULT_BRANCH }}"
+          git commit -m "chore: sync n8n ${{ steps.check.outputs.version }}"
+          git remote set-url origin https://${{ secrets.GH_PAT }}@github.com/${{ github.repository }}.git
+          git push origin master
 
-      - name: Create Release (tag = upstream tag)
+      - name: Create Release
         if: steps.check.outputs.skip_sync != 'true'
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
@@ -121,10 +123,17 @@ jobs:
           gh release delete "$TAG" --repo "$GITHUB_REPOSITORY" --cleanup-tag -y 2>/dev/null || true
           git tag -f "$TAG"
           git push origin "$TAG" -f
-
           STARDAWN_VERSION="$(cat STARDAWN_VERSION 2>/dev/null || echo "1.0")"
           gh release create "$TAG" \
             --repo "$GITHUB_REPOSITORY" \
             --title "n8n-advanced $TAG stardawn@$STARDAWN_VERSION" \
             --notes "n8n Base: $TAG | Stardawn: $STARDAWN_VERSION" \
             --latest
+
+      - name: Trigger n8n-advanced-ns rebuild
+        if: steps.check.outputs.skip_sync != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          set -euo pipefail
+          gh workflow run sync.yml --repo StardawnAI/n8n-advanced-ns
