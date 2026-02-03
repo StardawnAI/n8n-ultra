@@ -123,10 +123,11 @@ jobs:
         if: steps.check.outputs.skip_sync != 'true'
         run: |
           set -euo pipefail
-          corepack enable || true
-          npm i -g pnpm
+          corepack enable
+          pnpm --version
           pnpm install --frozen-lockfile
           pnpm build
+
 
       - name: Commit and Push
         if: steps.check.outputs.skip_sync != 'true'
