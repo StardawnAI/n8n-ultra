@@ -1,0 +1,35 @@
+# Data Science & Analysis
+pandas
+numpy
+matplotlib
+seaborn
+scipy
+scikit-learn
+
+# Web & APIs
+requests
+beautifulsoup4
+fastapi
+flask
+urllib3
+
+# File Processing
+openpyxl
+xlsxwriter
+pillow
+lxml
+
+# Database
+sqlalchemy
+pymongo
+psycopg2-binary
+
+# Utilities
+python-dateutil
+click
+tqdm
+pyyaml
+
+# Testing & Development
+pytest
+black

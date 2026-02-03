@@ -21,6 +21,8 @@ Custom-Node-Development-Guide.md merge=ours
 # custom script for adding custom nodes since we want to insert it into the node-base and credentials folder
 .github/scripts/inject-custom-nodes.sh merge=ours
 
+# custom logic
+stardawn_setup/* merge=ours
 
 # Remberg Custom Node
 packages/nodes-base/nodes/Remberg/** merge=ours

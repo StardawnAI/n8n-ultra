@@ -1,16 +1,26 @@
 name: Auto Sync n8n-advanced with Upstream
+
 on:
   schedule:
-    - cron: '0 * * * *'
+    - cron: "0 * * * *"
   workflow_dispatch:
 
 permissions:
   contents: write
   actions: read
 
+concurrency:
+  group: n8n-advanced-sync
+  cancel-in-progress: false
+
+env:
+  UPSTREAM_REPO: n8n-io/n8n
+  DEFAULT_BRANCH: master
+
 jobs:
   sync:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -20,145 +30,135 @@ jobs:
 
       - name: Configure Git
         run: |
-          git config --global user.name 'github-actions[bot]'
-          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          set -euo pipefail
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Check if rebuild needed
         id: check
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
-          for i in {1..5}; do
-            LATEST_RELEASE=$(gh release view --repo n8n-io/n8n --json tagName --jq .tagName) && break
-            sleep 10
-          done
+          set -euo pipefail
+          LATEST_RELEASE="$(gh release view --repo "${UPSTREAM_REPO}" --json tagName --jq '.tagName')"
+          [ -n "${LATEST_RELEASE:-}" ] || { echo "CRITICAL: no upstream tag"; exit 1; }
+          echo "version=$LATEST_RELEASE" >> "$GITHUB_OUTPUT"
 
-          if [ -z "$LATEST_RELEASE" ]; then
-            echo "CRITICAL: Could not find release tag. Aborting."
-            exit 1
+          OUR_LATEST_TAG="$(gh release list --repo "$GITHUB_REPOSITORY" --limit 1 --json tagName --jq '.[0].tagName' 2>/dev/null || true)"
+          OUR_LATEST_TAG="${OUR_LATEST_TAG:-}"
+
+          if [ -z "$OUR_LATEST_TAG" ] || [ "$LATEST_RELEASE" != "$OUR_LATEST_TAG" ]; then
+            echo "skip_sync=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
 
-          echo "version=$LATEST_RELEASE" >> $GITHUB_OUTPUT
+          git fetch origin --tags --force
+          TAG_COMMIT="$(git rev-parse "refs/tags/$OUR_LATEST_TAG^{}" 2>/dev/null || echo "")"
+          HEAD_COMMIT="$(git rev-parse HEAD)"
 
-          OUR_LATEST_TAG=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 1 --json tagName --jq '.[0].tagName' 2>/dev/null || echo "")
-
-          echo "n8n's latest release: $LATEST_RELEASE"
-          echo "Our latest release: $OUR_LATEST_TAG"
-
-          if [ "$LATEST_RELEASE" != "$OUR_LATEST_TAG" ]; then
-            echo "n8n has a new release ($LATEST_RELEASE). Proceeding..."
-            echo "skip_sync=false" >> $GITHUB_OUTPUT
+          if [ -n "$TAG_COMMIT" ] && [ "$TAG_COMMIT" = "$HEAD_COMMIT" ]; then
+            echo "skip_sync=true" >> "$GITHUB_OUTPUT"
           else
-            TAG_INFO=$(gh api repos/$GITHUB_REPOSITORY/git/refs/tags/$OUR_LATEST_TAG 2>/dev/null || echo "")
-            if [ -n "$TAG_INFO" ]; then
-              TAG_TYPE=$(echo "$TAG_INFO" | jq -r '.object.type')
-              if [ "$TAG_TYPE" = "tag" ]; then
-                TAG_SHA=$(echo "$TAG_INFO" | jq -r '.object.sha')
-                RELEASE_COMMIT=$(gh api repos/$GITHUB_REPOSITORY/git/tags/$TAG_SHA --jq '.object.sha' 2>/dev/null || echo "none")
-              else
-                RELEASE_COMMIT=$(echo "$TAG_INFO" | jq -r '.object.sha')
-              fi
-            else
-              RELEASE_COMMIT="none"
-            fi
-
-            CURRENT_HEAD=$(git rev-parse HEAD)
-
-            if [ "$RELEASE_COMMIT" = "$CURRENT_HEAD" ]; then
-              echo "=== NOTHING IS NEW. Skipping. ==="
-              echo "skip_sync=true" >> $GITHUB_OUTPUT
-            else
-              echo "New code since last release. Rebuilding..."
-              echo "skip_sync=false" >> $GITHUB_OUTPUT
-            fi
+            echo "skip_sync=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Sync n8n code
+      - name: Snapshot Stardawn overlay
         if: steps.check.outputs.skip_sync != 'true'
         run: |
-          LATEST_RELEASE="${{ steps.check.outputs.version }}"
+          set -euo pipefail
+          tar -czf /tmp/stardawn_overlay.tgz \
+            stardawn_setup \
+            .github \
+            .devcontainer \
+            workflows \
+            workflows-static \
+            initial-credentials \
+            STARDAWN_VERSION \
+            2>/dev/null || true
 
-          git remote add upstream https://github.com/n8n-io/n8n.git || true
-
-          for i in {1..5}; do
-            git fetch upstream --tags --force && break
-            sleep 10
-          done
-
-          git checkout "$LATEST_RELEASE" -- packages/ || true
-          git checkout "$LATEST_RELEASE" -- package.json || true
-          git checkout "$LATEST_RELEASE" -- pnpm-lock.yaml || true
-          git checkout "$LATEST_RELEASE" -- pnpm-workspace.yaml || true
-          git checkout "$LATEST_RELEASE" -- turbo.json || true
-          git checkout "$LATEST_RELEASE" -- tsconfig.json || true
-          git checkout "$LATEST_RELEASE" -- .npmrc || true
-
-      - name: Inject Custom Nodes
+      - name: Reset to upstream release tag (CLEAN)
         if: steps.check.outputs.skip_sync != 'true'
         run: |
-          chmod +x .github/scripts/inject-custom-nodes.sh
-          bash .github/scripts/inject-custom-nodes.sh || true
+          set -euo pipefail
+          TAG="${{ steps.check.outputs.version }}"
+          git remote add upstream "https://github.com/${{ env.UPSTREAM_REPO }}.git" 2>/dev/null || true
+          git fetch upstream --tags --force
+          git checkout -B "${{ env.DEFAULT_BRANCH }}" "$TAG"
+          git reset --hard "$TAG"
+          git clean -fdx
 
-      - name: Get Node.js version from n8n
+      - name: Restore overlay
+        if: steps.check.outputs.skip_sync != 'true'
+        run: |
+          set -euo pipefail
+          tar -xzf /tmp/stardawn_overlay.tgz -C . || true
+
+      - name: Ensure jq
+        if: steps.check.outputs.skip_sync != 'true'
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Setup Node.js (from n8n engines)
         if: steps.check.outputs.skip_sync != 'true'
         id: node
         run: |
-          NODE_VERSION=$(jq -r '.engines.node' package.json | grep -oE '[0-9]+' | head -1)
-          echo "version=$NODE_VERSION" >> $GITHUB_OUTPUT
+          set -euo pipefail
+          NODE_MAJOR="$(jq -r '.engines.node // empty' package.json | grep -oE '[0-9]+' | head -1 || true)"
+          [ -n "${NODE_MAJOR:-}" ] || NODE_MAJOR="22"
+          echo "version=$NODE_MAJOR" >> "$GITHUB_OUTPUT"
 
-      - name: Setup Node.js
+      - name: Use Node.js
         if: steps.check.outputs.skip_sync != 'true'
         uses: actions/setup-node@v4
         with:
           node-version: ${{ steps.node.outputs.version }}
 
-      - name: Install Dependencies
+      - name: Inject Stardawn nodes/credentials into nodes-base + patch package.json
         if: steps.check.outputs.skip_sync != 'true'
         run: |
-          npm install -g pnpm
-          pnpm install --frozen-lockfile || true
+          set -euo pipefail
+          chmod +x .github/scripts/stardawn-inject.sh
+          .github/scripts/stardawn-inject.sh
+
+      - name: Install deps + Build (fail hard)
+        if: steps.check.outputs.skip_sync != 'true'
+        run: |
+          set -euo pipefail
+          corepack enable || true
+          npm i -g pnpm
+          pnpm install --frozen-lockfile
+          pnpm build
 
       - name: Commit and Push
         if: steps.check.outputs.skip_sync != 'true'
         run: |
+          set -euo pipefail
           git add -A
-          
-          if git diff --cached --quiet; then
-            echo "Nothing to commit, skipping..."
-            exit 0
-          fi
-          
-          git commit -m "chore: sync n8n ${{ steps.check.outputs.version }}" || true
+          git diff --cached --quiet && exit 0
+          git commit -m "chore: sync n8n ${{ steps.check.outputs.version }}"
+          git remote set-url origin "https://${{ secrets.GH_PAT }}@github.com/${{ github.repository }}.git"
+          git push origin "${{ env.DEFAULT_BRANCH }}"
 
-          git remote set-url origin https://${{ secrets.GH_PAT }}@github.com/${{ github.repository }}.git
-          for i in {1..5}; do
-            git push origin master && break
-            sleep 15
-          done
-
-      - name: Create Release
+      - name: Create Release (tag = upstream tag)
         if: steps.check.outputs.skip_sync != 'true'
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+          GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
-          LATEST_RELEASE="${{ steps.check.outputs.version }}"
-
-          gh release delete "$LATEST_RELEASE" --repo "$GITHUB_REPOSITORY" --cleanup-tag -y 2>/dev/null || true
-
-          git tag -f "$LATEST_RELEASE" || true
-          git push origin "$LATEST_RELEASE" -f || true
-
-          STARDAWN_VERSION=$(cat STARDAWN_VERSION 2>/dev/null || echo "1.0")
-
-          gh release create "$LATEST_RELEASE" \
+          set -euo pipefail
+          TAG="${{ steps.check.outputs.version }}"
+          gh release delete "$TAG" --repo "$GITHUB_REPOSITORY" --cleanup-tag -y 2>/dev/null || true
+          git tag -f "$TAG"
+          git push origin "$TAG" -f
+          STARDAWN_VERSION="$(cat STARDAWN_VERSION 2>/dev/null || echo "1.0")"
+          gh release create "$TAG" \
             --repo "$GITHUB_REPOSITORY" \
-            --title "n8n-advanced $LATEST_RELEASE stardawn@$STARDAWN_VERSION" \
-            --notes "n8n Base: $LATEST_RELEASE | Stardawn: $STARDAWN_VERSION" \
-            --latest || true
+            --title "n8n-advanced $TAG stardawn@$STARDAWN_VERSION" \
+            --notes "n8n Base: $TAG | Stardawn: $STARDAWN_VERSION" \
+            --latest
 
       - name: Trigger n8n-advanced-ns rebuild
         if: steps.check.outputs.skip_sync != 'true'
-        run: |
-          gh workflow run sync.yml --repo StardawnAI/n8n-advanced-ns || true
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          set -euo pipefail
+          gh workflow run sync.yml --repo StardawnAI/n8n-advanced-ns

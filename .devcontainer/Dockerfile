@@ -1,35 +1,53 @@
-FROM n8nio/n8n:latest
+FROM node:22-bookworm
 
-USER root
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential gcc g++ gfortran python3-dev python3 python3-pip python3-venv \
+    libopenblas-dev liblapack-dev libfreetype6-dev libpng-dev libjpeg-dev \
+    libxml2-dev libxslt1-dev libffi-dev libssl-dev rustc cargo \
+    libcurl4-openssl-dev libpq-dev default-libmysqlclient-dev \
+    libgdal-dev libproj-dev libgeos-dev \
+    libx11-dev libxtst-dev xorg tesseract-ocr \
+    git curl wget vim bash postgresql-client default-mysql-client \
+    tini jq \
+    && rm -rf /var/lib/apt/lists/*
 
-# Step 1: Install system-level build and runtime dependencies
-RUN apk update && apk add --no-cache \
-    build-base gcc g++ gfortran musl-dev python3-dev linux-headers \
-    openblas-dev lapack-dev freetype-dev libpng-dev jpeg-dev \
-    libxml2-dev libxslt-dev libffi-dev openssl-dev rust cargo \
-    curl-dev libpq-dev mariadb-dev gdal-dev proj-dev geos-dev \
-    libx11-dev libxtst-dev xorg-server tesseract-ocr python3 py3-pip \
-    git curl wget vim bash postgresql-client mysql-client
+RUN npm install -g pnpm
 
-# Step 2: Copy files only (no Python package installation - installation occurs under setup-defaults.sh)
-RUN mkdir -p /usr/src/app/default-workflows
+# pre-built n8n from CI
+COPY compiled/ /usr/local/lib/node_modules/n8n/
+
+WORKDIR /usr/local/lib/node_modules/n8n
+RUN pnpm install --prod
+
+RUN ln -sf /usr/local/lib/node_modules/n8n/packages/cli/bin/n8n /usr/local/bin/n8n
+RUN n8n --version
+
+# --- Python default packages (from stardawn_setup)
+COPY stardawn_setup/python-default-packages /tmp/python-default-packages.txt
+RUN python3 -m venv /opt/venv && \
+    /opt/venv/bin/pip install -U pip setuptools wheel && \
+    /opt/venv/bin/pip install -r /tmp/python-default-packages.txt
+
+ENV PATH="/opt/venv/bin:$PATH"
+
+# runtime assets
+WORKDIR /
+RUN mkdir -p /usr/src/app/default-workflows \
+    && mkdir -p /usr/src/app/initial-credentials \
+    && mkdir -p /usr/src/app/workflows-static
+
 COPY workflows/ /usr/src/app/default-workflows/
 COPY initial-credentials/ /usr/src/app/initial-credentials/
-COPY requirements.txt /tmp/requirements.txt
-
-# Step 3: Copy and fix the setup script
+COPY workflows-static/ /usr/src/app/workflows-static/
 COPY .devcontainer/setup-defaults.sh /tmp/setup-defaults.sh
+
 RUN echo '#!/bin/sh' > /usr/local/bin/setup-defaults.sh && \
     tr -d '\r' < /tmp/setup-defaults.sh >> /usr/local/bin/setup-defaults.sh && \
     chmod +x /usr/local/bin/setup-defaults.sh && \
     rm /tmp/setup-defaults.sh
 
-COPY workflows-static/ /usr/src/app/workflows-static/
-
-
-# Step 4: Set correct ownership and switch back to the non-root user
 RUN chown -R node:node /home/node /usr/src/app
-USER node
 
-# Step 5: Use sh explicitly to run the script
+USER node
+WORKDIR /home/node
 CMD ["/bin/sh", "-c", "/usr/local/bin/setup-defaults.sh"]
