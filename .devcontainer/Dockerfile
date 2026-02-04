@@ -7,6 +7,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libcurl4-openssl-dev libpq-dev default-libmysqlclient-dev \
     libgdal-dev libproj-dev libgeos-dev \
     libx11-dev libxtst-dev xorg tesseract-ocr \
+    # default-mysql-client is required for Debian Bookworm (mysql-client is missing)
     git curl wget vim bash postgresql-client default-mysql-client \
     tini jq \
     && rm -rf /var/lib/apt/lists/*
