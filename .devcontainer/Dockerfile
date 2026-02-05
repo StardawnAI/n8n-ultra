@@ -23,7 +23,8 @@ RUN ln -sf /usr/local/lib/node_modules/n8n/packages/cli/bin/n8n /usr/local/bin/n
 RUN n8n --version
 
 # --- Python default packages (from stardawn_setup)
-COPY stardawn_setup/python-default-packages /tmp/python-default-packages.txt
+COPY stardawn_setup/python-default-packages.txt /tmp/python-default-packages.txt
+
 RUN python3 -m venv /opt/venv && \
     /opt/venv/bin/pip install -U pip setuptools wheel && \
     /opt/venv/bin/pip install -r /tmp/python-default-packages.txt
