@@ -16,6 +16,9 @@ RUN npm install -g pnpm
 # pre-built n8n from CI
 COPY compiled/ /usr/local/lib/node_modules/n8n/
 
+COPY patches/ /usr/local/lib/node_modules/n8n/patches/
+
+
 WORKDIR /usr/local/lib/node_modules/n8n
 RUN pnpm install --prod
 
