@@ -41,3 +41,7 @@
 # === Stardawn custom setup (Python packages, configs) ===
 !stardawn_setup/
 !stardawn_setup/**
+
+!patches/
+!patches/**
+
