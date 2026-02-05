@@ -1,0 +1,18 @@
+{
+  "nodes": [
+    "dist/nodes/Remberg/Remberg.node.js",
+    "dist/nodes/WhatsappPrivate/WhatsappPrivate.node.js"
+  ],
+  "credentials": [
+    "dist/credentials/RembergApi.credentials.js",
+    "dist/credentials/WhatsappPrivateApi.credentials.js"
+  ],
+  "nodeFolders": [
+    "Remberg",
+    "WhatsappPrivate"
+  ],
+  "credFiles": [
+    "RembergApi.credentials.ts",
+    "WhatsappPrivateApi.credentials.ts"
+  ]
+}
