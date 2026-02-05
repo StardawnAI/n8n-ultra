@@ -50,6 +50,7 @@ jobs:
           rm -rf compiled
           mkdir -p compiled
           cp -r packages compiled/
+          cp -r patches compiled/ 
           cp package.json compiled/
           cp pnpm-lock.yaml compiled/
           cp pnpm-workspace.yaml compiled/ || true
@@ -95,3 +96,5 @@ jobs:
           platforms: linux/amd64
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          
+   
