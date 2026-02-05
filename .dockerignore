@@ -36,3 +36,8 @@
 !requirements.txt
 !workflows-static/
 !workflows-static/**
+
+
+# === Stardawn custom setup (Python packages, configs) ===
+!stardawn_setup/
+!stardawn_setup/**
