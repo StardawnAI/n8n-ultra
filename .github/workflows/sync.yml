@@ -69,9 +69,13 @@ jobs:
           git remote add upstream https://github.com/n8n-io/n8n.git 2>/dev/null || true
           git fetch upstream --tags --force
 
-          # overwrite ONLY upstream-managed files
+          # Full clean sync: remove old packages first, then checkout fresh from tag
+          # This ensures deleted files from n8n are also removed (not just overwritten)
+          rm -rf packages/
           git checkout "$TAG" -- packages/
-          git checkout "$TAG" -- package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.json .npmrc CHANGELOG.md || true
+          
+          # Sync root config files
+          git checkout "$TAG" -- package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.json .npmrc CHANGELOG.md
 
       - name: Inject Stardawn nodes/credentials into nodes-base + patch package.json
         if: steps.check.outputs.skip_sync != 'true'
