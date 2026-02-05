@@ -13,8 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN npm install -g pnpm
 
-# pre-built n8n from CI
-COPY compiled/ /usr/local/lib/node_modules/n8n/
+
 
 COPY patches/ /usr/local/lib/node_modules/n8n/patches/
 
