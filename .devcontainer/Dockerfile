@@ -13,13 +13,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN npm install -g pnpm
 
-
-
-COPY patches/ /usr/local/lib/node_modules/n8n/patches/
-
+# pre-built n8n from CI
+COPY compiled/ /usr/local/lib/node_modules/n8n/
 
 WORKDIR /usr/local/lib/node_modules/n8n
-RUN pnpm install --prod
+RUN npm rebuild sqlite3
 
 RUN ln -sf /usr/local/lib/node_modules/n8n/packages/cli/bin/n8n /usr/local/bin/n8n
 RUN n8n --version

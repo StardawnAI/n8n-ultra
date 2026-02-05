@@ -47,16 +47,7 @@ jobs:
       - name: Package for Docker
         run: |
           set -euo pipefail
-          rm -rf compiled
-          mkdir -p compiled
-          cp -r packages compiled/
-          cp -r patches compiled/ 
-          cp package.json compiled/
-          cp pnpm-lock.yaml compiled/
-          cp pnpm-workspace.yaml compiled/ || true
-          cp turbo.json compiled/ || true
-          cp tsconfig.json compiled/ || true
-          cp .npmrc compiled/ || true
+          pnpm run build:deploy
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
