@@ -1,0 +1,2 @@
+# Paths to fetch from n8n-ultra into n8n-ultra-ns
+stardawn_setup/
