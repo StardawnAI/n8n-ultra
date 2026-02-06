@@ -138,7 +138,7 @@ jobs:
           STARDAWN_VERSION="$(cat STARDAWN_VERSION 2>/dev/null || echo "1.0")"
           gh release create "$TAG" \
             --repo "$GITHUB_REPOSITORY" \
-            --title "n8n-advanced $TAG stardawn@$STARDAWN_VERSION" \
+            --title "n8n-ultra $TAG stardawn@$STARDAWN_VERSION" \
             --notes "n8n Base: $TAG | Stardawn: $STARDAWN_VERSION" \
             --latest
 
@@ -148,4 +148,4 @@ jobs:
           GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
           set -euo pipefail
-          gh workflow run sync.yml --repo StardawnAI/n8n-advanced-ns
+          gh workflow run sync.yml --repo StardawnAI/n8n-ultra-ns

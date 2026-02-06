@@ -75,7 +75,7 @@ jobs:
         with:
           images: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-            ${{ secrets.DOCKERHUB_USERNAME }}/n8n-advanced
+            ${{ secrets.DOCKERHUB_USERNAME }}/n8n-ultra
           tags: |
             type=raw,value=latest
             type=raw,value=${{ github.ref_name }}
