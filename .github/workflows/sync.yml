@@ -104,6 +104,13 @@ jobs:
           set -euo pipefail
           corepack enable
           pnpm --version
+          
+          # Fix network stability
+          pnpm config set fetch-retries 10
+          pnpm config set fetch-retry-mintimeout 20000
+          pnpm config set fetch-retry-maxtimeout 120000
+          pnpm config set network-concurrency 8
+
           pnpm install --frozen-lockfile
           pnpm build
 
