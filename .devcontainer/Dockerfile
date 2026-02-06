@@ -19,7 +19,7 @@ COPY compiled/ /usr/local/lib/node_modules/n8n/
 WORKDIR /usr/local/lib/node_modules/n8n
 RUN npm rebuild sqlite3
 
-RUN ln -sf /usr/local/lib/node_modules/n8n/packages/cli/bin/n8n /usr/local/bin/n8n
+RUN ln -sf /usr/local/lib/node_modules/n8n/bin/n8n /usr/local/bin/n8n
 RUN n8n --version
 
 # --- Python default packages (from stardawn_setup)
