@@ -102,18 +102,17 @@ jobs:
         if: steps.check.outputs.skip_sync != 'true'
         run: |
           set -euo pipefail
-          echo "Skipping build/install to speed up sync commit."
-          # corepack enable
-          # pnpm --version
-          
-          # Fix network stability
-          # pnpm config set fetch-retries 10
-          # pnpm config set fetch-retry-mintimeout 20000
-          # pnpm config set fetch-retry-maxtimeout 120000
-          # pnpm config set network-concurrency 8
+          corepack enable
+          pnpm --version
 
-          # pnpm install --frozen-lockfile
-          # pnpm build
+          # Fix network stability
+          pnpm config set fetch-retries 10
+          pnpm config set fetch-retry-mintimeout 20000
+          pnpm config set fetch-retry-maxtimeout 120000
+          pnpm config set network-concurrency 8
+
+          pnpm install --frozen-lockfile
+          pnpm build
 
       - name: Commit and Push
         if: steps.check.outputs.skip_sync != 'true'
