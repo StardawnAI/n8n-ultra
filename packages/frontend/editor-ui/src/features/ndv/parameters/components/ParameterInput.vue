@@ -81,6 +81,7 @@ import { useNDVStore } from '@/features/ndv/shared/ndv.store';
 import { useNodeTypesStore } from '@/app/stores/nodeTypes.store';
 import { useSettingsStore } from '@/app/stores/settings.store';
 import { useWorkflowsStore } from '@/app/stores/workflows.store';
+import { useWorkflowsListStore } from '@/app/stores/workflowsList.store';
 import { useUIStore } from '@/app/stores/ui.store';
 import type { EventBus } from '@n8n/utils/event-bus';
 import { createEventBus } from '@n8n/utils/event-bus';
@@ -174,6 +175,7 @@ const telemetry = useTelemetry();
 const credentialsStore = useCredentialsStore();
 const ndvStore = useNDVStore();
 const workflowsStore = useWorkflowsStore();
+const workflowsListStore = useWorkflowsListStore();
 const workflowState = injectWorkflowState();
 const settingsStore = useSettingsStore();
 const nodeTypesStore = useNodeTypesStore();
@@ -529,7 +531,7 @@ const getIssues = computed<string[]>(() => {
 	} else if (props.parameter.type === 'workflowSelector') {
 		const selected = modelValueResourceLocator.value?.value;
 		if (selected) {
-			const isSelectedArchived = workflowsStore.allWorkflows.some(
+			const isSelectedArchived = workflowsListStore.allWorkflows.some(
 				(resource) => resource.id === selected && resource.isArchived,
 			);
 
@@ -1942,11 +1944,11 @@ onUpdated(async () => {
 }
 
 .droppable {
-	--input--border-color: transparent;
-	--input--border-right-color: transparent;
+	--input--border-color: var(--ndv--droppable-parameter--color);
+	--input--border-right-color: var(--ndv--droppable-parameter--color);
+	--input--border-style: dashed;
+	--input--border-width: 1.5px;
 
-	textarea,
-	input,
 	.cm-editor {
 		border-color: transparent;
 		outline: 1.5px dashed var(--ndv--droppable-parameter--color);
@@ -1960,15 +1962,12 @@ onUpdated(async () => {
 	--input--border-right-color: var(--color--success);
 	--input--color--background: var(--color--foreground--tint-2);
 	--input--border-style: solid;
+	--input--border-width: 1px;
 
 	textarea,
 	input,
 	.cm-editor {
 		cursor: grabbing !important;
-		border-color: var(--color--success);
-		border-width: 1px;
-		outline: none;
-		transition: none;
 	}
 }
 
@@ -2085,6 +2084,7 @@ onUpdated(async () => {
 
 .tipVisible {
 	--input--radius--bottom-left: 0;
+	--input--radius--bottom-right: 0;
 	--input-triple--radius--bottom-right: 0;
 }
 

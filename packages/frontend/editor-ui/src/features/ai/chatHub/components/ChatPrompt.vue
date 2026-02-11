@@ -453,8 +453,12 @@ defineExpose({
 	border: var(--border);
 	display: flex;
 	flex-direction: column;
-	gap: var(--spacing--sm);
+	gap: var(--spacing--md);
 	transition: border-color 0.2s cubic-bezier(0.645, 0.045, 0.355, 1);
+	--input--border-color: transparent;
+	--input--border-color--hover: transparent;
+	--input--border-color--focus: transparent;
+	--input--color--background: transparent;
 
 	&:focus-within,
 	&:hover:has(textarea:not(:disabled)) {
@@ -462,11 +466,9 @@ defineExpose({
 	}
 
 	& textarea {
-		font: inherit;
+		font-size: var(--font-size--md);
 		line-height: 1.5em;
 		resize: none;
-		background-color: transparent !important;
-		border: none !important;
 		padding: 0 !important;
 	}
 
