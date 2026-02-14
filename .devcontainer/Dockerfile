@@ -1,6 +1,6 @@
 FROM node:22-bookworm
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     build-essential gcc g++ gfortran python3-dev python3 python3-pip python3-venv \
     libopenblas-dev liblapack-dev libfreetype6-dev libpng-dev libjpeg-dev \
     libxml2-dev libxslt1-dev libffi-dev libssl-dev rustc cargo \
