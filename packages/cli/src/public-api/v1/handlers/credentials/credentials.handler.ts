@@ -18,6 +18,7 @@ import {
 	validCredentialsPropertiesForUpdate,
 } from './credentials.middleware';
 import {
+	buildSharedForCredential,
 	CredentialsIsNotUpdatableError,
 	getCredentials,
 	getSharedCredentials,
@@ -28,9 +29,69 @@ import {
 	updateCredential,
 } from './credentials.service';
 import type { CredentialTypeRequest, CredentialRequest } from '../../../types';
-import { apiKeyHasScope, projectScope } from '../../shared/middlewares/global.middleware';
+import {
+	apiKeyHasScope,
+	apiKeyHasScopeWithGlobalScopeFallback,
+	projectScope,
+	validCursor,
+} from '../../shared/middlewares/global.middleware';
+import { encodeNextCursor } from '../../shared/services/pagination.service';
+import { CredentialsRepository } from '@n8n/db';
 
 export = {
+	getCredentials: [
+		apiKeyHasScopeWithGlobalScopeFallback({ scope: 'credential:list' }),
+		validCursor,
+		async (
+			req: CredentialRequest.GetAll,
+			res: express.Response,
+		): Promise<
+			express.Response<{
+				data: Array<{
+					id: string;
+					name: string;
+					type: string;
+					createdAt: Date;
+					updatedAt: Date;
+					shared: ReturnType<typeof buildSharedForCredential>;
+				}>;
+				nextCursor: string | null;
+			}>
+		> => {
+			const offset = Number(req.query.offset) || 0;
+			const limit = Math.min(Number(req.query.limit) || 100, 250);
+
+			const repo = Container.get(CredentialsRepository);
+			const [credentials, count] = await repo.findAndCount({
+				take: limit,
+				skip: offset,
+				select: ['id', 'name', 'type', 'createdAt', 'updatedAt'],
+				relations: ['shared', 'shared.project'],
+				order: { createdAt: 'DESC' },
+			});
+
+			const data = credentials.map((credential: CredentialsEntity) => {
+				const shared = buildSharedForCredential(credential);
+				return {
+					id: credential.id,
+					name: credential.name,
+					type: credential.type,
+					createdAt: credential.createdAt,
+					updatedAt: credential.updatedAt,
+					shared,
+				};
+			});
+
+			return res.json({
+				data,
+				nextCursor: encodeNextCursor({
+					offset,
+					limit,
+					numberOfTotalRecords: count,
+				}),
+			});
+		},
+	],
 	createCredential: [
 		validCredentialType,
 		validCredentialsProperties,
