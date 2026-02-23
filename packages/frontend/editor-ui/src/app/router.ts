@@ -606,12 +606,8 @@ export const routes: RouteRecordRaw[] = [
 				name: VIEWS.SECURITY_SETTINGS,
 				component: SecuritySettingsView,
 				meta: {
-					middleware: ['authenticated', 'custom', 'rbac'],
+					middleware: ['authenticated', 'rbac'],
 					middlewareOptions: {
-						custom: () => {
-							const { check } = useEnvFeatureFlag();
-							return check.value('PERSONAL_SECURITY_SETTINGS');
-						},
 						rbac: {
 							scope: ['securitySettings:manage'],
 						},
@@ -689,6 +685,28 @@ export const routes: RouteRecordRaw[] = [
 						getProperties() {
 							return {
 								feature: 'resolvers',
+							};
+						},
+					},
+				},
+			},
+			{
+				path: 'project-roles/view/:roleSlug',
+				name: VIEWS.PROJECT_ROLE_VIEW,
+				component: async () => await import('@/features/project-roles/ProjectRoleView.vue'),
+				props: true,
+				meta: {
+					middleware: ['authenticated', 'enterprise'],
+					middlewareOptions: {
+						enterprise: {
+							feature: EnterpriseEditionFeature.CustomRoles,
+						},
+					},
+					telemetry: {
+						pageCategory: 'settings',
+						getProperties() {
+							return {
+								feature: 'project-roles',
 							};
 						},
 					},

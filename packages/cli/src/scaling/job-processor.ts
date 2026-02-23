@@ -13,7 +13,6 @@ import type { Tool } from '@langchain/core/tools';
 import type {
 	ExecutionStatus,
 	IExecuteData,
-	IExecuteFunctions,
 	IExecuteResponsePromiseData,
 	INodeExecutionData,
 	IRun,
@@ -443,10 +442,8 @@ export class JobProcessor {
 
 	/**
 	 * Invoke a tool directly for MCP Trigger in queue mode.
-	 * For nodes with supplyData (e.g. native langchain tool nodes), creates a
-	 * SupplyDataContext, calls supplyData to get the Tool, and invokes it.
-	 * For tool wrapper nodes without supplyData (e.g. httpRequestTool), calls
-	 * execute directly — mirroring the fallback in get-input-connection-data.ts.
+	 * This method creates a SupplyDataContext, calls supplyData to get the Tool,
+	 * and invokes it directly instead of running a full workflow execution.
 	 */
 	private async invokeTool(
 		workflow: Workflow,
@@ -465,6 +462,9 @@ export class JobProcessor {
 
 		// Get the node type
 		const nodeType = this.nodeTypes.getByNameAndVersion(toolNode.type, toolNode.typeVersion);
+		if (!nodeType.supplyData) {
+			throw new UnexpectedError(`Tool node "${sourceNodeName}" does not have supplyData method`);
+		}
 
 		// Validate toolArgs is a proper object (not null/array) before using as input data
 		const validatedToolArgs =
@@ -509,36 +509,16 @@ export class JobProcessor {
 		);
 
 		try {
-			if (nodeType.supplyData) {
-				const supplyDataResult = await nodeType.supplyData.call(context, 0);
-				const tool = supplyDataResult.response as Tool;
+			const supplyDataResult = await nodeType.supplyData.call(context, 0);
+			const tool = supplyDataResult.response as Tool;
 
-				if (!tool || typeof tool.invoke !== 'function') {
-					throw new UnexpectedError(`Tool node "${sourceNodeName}" did not return a valid Tool`);
-				}
-
-				return await tool.invoke(validatedToolArgs);
+			if (!tool || typeof tool.invoke !== 'function') {
+				throw new UnexpectedError(`Tool node "${sourceNodeName}" did not return a valid Tool`);
 			}
 
-			if (nodeType.execute && nodeType.description.outputs.includes(NodeConnectionTypes.AiTool)) {
-				context.addInputData(NodeConnectionTypes.AiTool, [
-					[{ json: validatedToolArgs as INodeExecutionData['json'] }],
-				]);
+			const result = await tool.invoke(validatedToolArgs);
 
-				const result = await nodeType.execute.call(context as unknown as IExecuteFunctions);
-
-				const response = result?.[0]?.flatMap((item: INodeExecutionData) => item.json);
-
-				context.addOutputData(NodeConnectionTypes.AiTool, 0, [
-					[{ json: { response } as INodeExecutionData['json'] }],
-				]);
-
-				return response;
-			}
-
-			throw new UnexpectedError(
-				`Tool node "${sourceNodeName}" does not have supplyData or execute method`,
-			);
+			return result;
 		} finally {
 			for (const closeFunction of closeFunctions) {
 				try {

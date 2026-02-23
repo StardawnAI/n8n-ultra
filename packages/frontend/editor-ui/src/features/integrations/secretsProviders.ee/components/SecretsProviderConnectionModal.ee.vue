@@ -6,7 +6,11 @@ import { createEventBus } from '@n8n/utils/event-bus';
 import type { IUpdateInformation } from '@/Interface';
 import type { SecretProviderTypeResponse } from '@n8n/api-types';
 import type { IParameterLabel } from 'n8n-workflow';
-import { SECRETS_PROVIDER_CONNECTION_MODAL_KEY, MODAL_CONFIRM } from '@/app/constants';
+import {
+	SECRETS_PROVIDER_CONNECTION_MODAL_KEY,
+	MODAL_CONFIRM,
+	DELETE_SECRETS_PROVIDER_MODAL_KEY,
+} from '@/app/constants';
 import Modal from '@/app/components/Modal.vue';
 import SaveButton from '@/app/components/SaveButton.vue';
 import SecretsProviderImage from './SecretsProviderImage.ee.vue';
@@ -15,6 +19,7 @@ import { useConnectionModal } from '@/features/integrations/secretsProviders.ee/
 import {
 	N8nCallout,
 	N8nIcon,
+	N8nIconButton,
 	N8nInput,
 	N8nInputLabel,
 	N8nLoading,
@@ -24,12 +29,14 @@ import {
 	N8nSelect,
 	N8nText,
 	N8nInfoTip,
+	N8nTooltip,
 	type IMenuItem,
 } from '@n8n/design-system';
 import { useElementSize } from '@vueuse/core';
 import ProjectSharing from '@/features/collaboration/projects/components/ProjectSharing.vue';
 import { useProjectsStore } from '@/features/collaboration/projects/projects.store';
 import type { ProjectSharingData } from '@/features/collaboration/projects/projects.types';
+import { useUIStore } from '@/app/stores/ui.store';
 
 // Props
 const props = withDefaults(
@@ -41,7 +48,7 @@ const props = withDefaults(
 			providerTypes?: SecretProviderTypeResponse[];
 			existingProviderNames?: string[];
 			projectId?: string;
-			onClose?: (saved?: boolean) => void;
+			onClose?: () => void;
 		};
 	}>(),
 	{
@@ -56,6 +63,7 @@ const i18n = useI18n();
 const { confirm } = useMessage();
 const eventBus = createEventBus();
 const projectsStore = useProjectsStore();
+const uiStore = useUIStore();
 
 // Constants
 const LABEL_SIZE: IParameterLabel = { size: 'medium' };
@@ -132,6 +140,23 @@ async function handleSave() {
 	await modal.saveConnection();
 }
 
+function handleDelete() {
+	if (!modal.providerKey.value) return;
+
+	uiStore.openModalWithData({
+		name: DELETE_SECRETS_PROVIDER_MODAL_KEY,
+		data: {
+			providerKey: modal.providerKey.value,
+			providerName: modal.connectionName.value,
+			secretsCount: modal.providerSecretsCount.value ?? 0,
+			onConfirm: () => {
+				props.data.onClose?.();
+				eventBus.emit('close');
+			},
+		},
+	});
+}
+
 async function handleBeforeClose() {
 	if (modal.hasUnsavedChanges.value) {
 		const result = await confirm(
@@ -148,19 +173,16 @@ async function handleBeforeClose() {
 		}
 	}
 
-	props.data.onClose?.(modal.didSave.value);
+	props.data.onClose?.();
 	return true;
 }
 
-// Lifecycle
 onMounted(async () => {
 	if (providerTypes.value.length === 0) return;
 
 	if (modal.isEditMode.value) {
 		await Promise.all([modal.loadConnection()]);
 	}
-
-	await projectsStore.getAllProjects();
 });
 
 const nameRef = useTemplateRef('nameRef');
@@ -172,10 +194,11 @@ const { width } = useElementSize(nameRef);
 		v-if="providerTypes.length"
 		:id="`${SECRETS_PROVIDER_CONNECTION_MODAL_KEY}-modal`"
 		:custom-class="$style.secretsProviderConnectionModal"
-		width="812px"
 		:event-bus="eventBus"
 		:name="SECRETS_PROVIDER_CONNECTION_MODAL_KEY"
 		:before-close="handleBeforeClose"
+		width="70%"
+		height="80%"
 	>
 		<template #header>
 			<div :class="$style.header">
@@ -201,6 +224,18 @@ const { width } = useElementSize(nameRef);
 					</div>
 				</div>
 				<div :class="$style.actions">
+					<N8nTooltip placement="left">
+						<N8nIconButton
+							v-if="modal.isEditMode.value && modal.canDelete.value"
+							:title="i18n.baseText('generic.delete')"
+							icon="trash-2"
+							variant="ghost"
+							:disabled="modal.isSaving.value"
+							data-test-id="secrets-provider-delete-button"
+							@click="handleDelete"
+						/>
+						<template #content>{{ i18n.baseText('generic.delete') }}</template>
+					</N8nTooltip>
 					<SaveButton
 						:saved="!modal.hasUnsavedChanges.value && modal.isEditMode.value"
 						:is-saving="modal.isSaving.value"
